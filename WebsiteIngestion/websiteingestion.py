@@ -2,6 +2,7 @@ from pathlib import Path
 BASE_DIR=Path("Data").resolve()
 import asyncio
 import uuid
+import shutil
 from langchain_community.vectorstores import FAISS
 from crawl4ai import (
     AsyncWebCrawler,
@@ -69,6 +70,23 @@ async def ingest_website(url:str):
         print("No markdown content to process.")
         return None
 
+async def update_website(url:str,id:str):
+    markdown=await website_crawl(url)
+    if markdown:
+        chunks=website_splitter.split(markdown)
+        feed_path=feed_dir/f"{id}"
+        temp_path=feed_dir/f"{id}__temp"
+        temp_path.mkdir(parents=True,exist_ok=True)
+        vectorstore=FAISS.from_documents(chunks,embedding_maker)
+        vectorstore.save_local(str(temp_path))
+        if feed_path.exists():
+            shutil.rmtree(feed_path)
+        temp_path.rename(feed_path)
+        print(f"Website {url} updated and saved to database with ID: {id}")
+        return None
+    else:
+        print("No markdown content to process.")
+        return None
 
 
 
