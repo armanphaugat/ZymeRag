@@ -7,7 +7,7 @@ import anyio
 from Dbhelper.website_db_helper import save_pdf_to_database
 from Splitter.PdfSplitter import PdfTextSplitter
 import uuid
-from Embeddings.Embeddingmaker import EmbeddingMaker
+from Embeddings.Embeddingmaker import Embedder
 from langchain_community.vectorstores import FAISS
 from docling.document_converter import DocumentConverter
 from Dbhelper.pdf_db_helper import save_pdf_to_database
@@ -15,7 +15,7 @@ BASE_DIR=SyncPath("Data").resolve()
 content_dir=BASE_DIR/"Content"
 converter = DocumentConverter()
 pdf_splitter = PdfTextSplitter()
-embedding_maker = EmbeddingMaker()
+embedding_maker = Embedder()
 
 async def read_text_from_pdf(file):
     pdf_bytes = await file.read()
