@@ -3,6 +3,7 @@ BASE_DIR=Path("Data").resolve()
 import asyncio
 import uuid
 import shutil
+import anyio
 from langchain_community.vectorstores import FAISS
 from crawl4ai import (
     AsyncWebCrawler,
@@ -87,6 +88,20 @@ async def update_website(url:str,id:str):
     else:
         print("No markdown content to process.")
         return None
+
+async def delete_website(id:str):
+    try:
+        feed_path=feed_dir/f"{id}"
+        if await feed_path.exists():
+            await anyio.to_thread.run_sync(shutil.rmtree, feed_path)
+            print(f"Feed with ID: {id} deleted successfully.")
+            return True
+        else:
+            print(f"Feed with ID: {id} does not exist.")
+            return False
+    except Exception as e:
+        print(f"Error occurred while deleting Feed: {e}")
+        return False
 
 
 
