@@ -10,7 +10,7 @@ import uuid
 from Embeddings.Embeddingmaker import Embedder
 from langchain_community.vectorstores import FAISS
 from docling.document_converter import DocumentConverter
-from Dbhelper.pdf_db_helper import save_pdf_to_database
+from Dbhelper.pdf_db_helper import save_content_to_database
 BASE_DIR=SyncPath("Data").resolve()
 content_dir=BASE_DIR/"Content"
 converter = DocumentConverter()
@@ -33,7 +33,7 @@ async def ingest_pdf(file,name:str):
         await content_path.mkdir(parents=True,exist_ok=True)
         vectorstore=FAISS.from_documents(chunks,embedding_maker)
         vectorstore.save_local(str(content_path))
-        database_saved=await save_pdf_to_database(name,id)
+        database_saved=await save_content_to_database(name,id)
         if database_saved:
             print(f"Pdf ingested and saved to database with ID: {id}")
             return id
