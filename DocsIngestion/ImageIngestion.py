@@ -4,6 +4,8 @@ import shutil
 
 from pathlib import Path as SyncPath
 import anyio
+from PIL import Image
+import numpy as np
 from Dbhelper.website_db_helper import save_pdf_to_database
 from Splitter.PdfSplitter import PdfTextSplitter
 import uuid
@@ -19,30 +21,37 @@ pdf_splitter = PdfTextSplitter()
 embedding_maker = Embedder()
 
 ocr=PaddleOCR(
-    lan="en",
+    lang="en",
     use_doc_orientation_classify=False,
-    use_doc_unwraping=True,
+    use_doc_unwarping=True,
     use_textline_orientation=False,
     device="gpu"
 )
 
+def ocr_doing(image_bytes:bytes):
+    image = Image.open(BytesIO(image_bytes)).convert("RGB")
+    image = np.array(image)
+    result = ocr.predict(image)
+    texts = []
+    for res in result:
+        data = res.json["res"]
+        texts.extend(data["rec_texts"])
+
+    return "\n".join(texts)
 async def read_text_from_image(file):
     image_bytes = await file.read()
     stream=BytesIO(image_bytes)
-    result=ocr.predict(stream)
-    text=[]
-    for res in result:
-        data=res.join["res"]
-        text.extend(data["rec_texts"])
-    return "\n".join(text)
+    result=await asyncio.to_thread(ocr_doing,stream)
+    return result
 
 async def ingestimage(file,name:str):
     try:
         text=await read_text_from_image(file)
         id=str(uuid.uuid4())
         content_path=content_dir/f"{id}"
-        await content_path.mkdir(parents=True,exist_ok=True)
-        vectorstore=FAISS.from_documents(text,embedding_maker)
+        content_path.mkdir(parents=True,exist_ok=True)
+        chunks=pdf_splitter.split(text)
+        vectorstore=FAISS.from_documents(chunks,embedding_maker)
         vectorstore.save_local(str(content_path))
         database_saved=await save_content_to_database(name,id)
         if database_saved:

@@ -30,7 +30,7 @@ async def ingest_pdf(file,name:str):
         chunks = pdf_splitter.split(markdown)
         id=str(uuid.uuid4())
         content_path=content_dir/f"{id}"
-        await content_path.mkdir(parents=True,exist_ok=True)
+        content_path.mkdir(parents=True,exist_ok=True)
         vectorstore=FAISS.from_documents(chunks,embedding_maker)
         vectorstore.save_local(str(content_path))
         database_saved=await save_content_to_database(name,id)
@@ -43,7 +43,7 @@ async def ingest_pdf(file,name:str):
         print(f"Error occurred while reading PDF: {e}")
         return None
 
-async def delete_pdf(id:str):
+async def delete_content(id:str):
     try:
         content_path=content_dir/f"{id}"
         if await content_path.exists():
