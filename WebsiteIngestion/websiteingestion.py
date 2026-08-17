@@ -18,14 +18,14 @@ from crawl4ai.markdown_generation_strategy import (
     DefaultMarkdownGenerator
 )
 from Splitter.WebsiteSplitter import WebsiteTextSplitter
-from Embeddings.Embeddingmaker import EmbeddingMaker
+from Embeddings.Embeddingmaker import Embedder
 markdown_generator=DefaultMarkdownGenerator(
     content_filter=PruningContentFilter(
         threshold=0.5,
     )
 )
 website_splitter=WebsiteTextSplitter()
-embedding_maker=EmbeddingMaker()
+embedding_maker=Embedder()
 config=CrawlerRunConfig(
             cache_mode=CacheMode.BYPASS,
             excluded_tags=["nav","footer","header","style","script"],
