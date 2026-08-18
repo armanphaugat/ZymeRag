@@ -22,7 +22,7 @@ embedding_maker = Embedder()
 
 
 
-async def ingestimage(text:str,name:str):
+async def ingestText(text:str,name:str):
     try:
         id=str(uuid.uuid4())
         content_path=content_dir/f"{id}"
@@ -36,9 +36,9 @@ async def ingestimage(text:str,name:str):
             vectorstore.save_local(str(content_path))
         database_saved=await save_content_to_database(name,id)
         if database_saved:
-            print(f"Image ingested and saved to database with ID: {id}")
+            print(f"Text ingested and saved to database with ID: {id}")
             return id
         return None
     except Exception as e:
-        print(f"Error Occured While Proccessing the Image {name} and Error is {e}")
+        print(f"Error Occured While Ingesting The Image {name} and Error is {e}")
         return None
