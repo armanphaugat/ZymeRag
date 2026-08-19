@@ -19,6 +19,9 @@ from crawl4ai.markdown_generation_strategy import (
 )
 from Splitter.WebsiteSplitter import WebsiteTextSplitter
 from Embeddings.Embeddingmaker import Embedder
+from rank_bm25 import BM25Okapi
+import pickle
+import re
 markdown_generator=DefaultMarkdownGenerator(
     content_filter=PruningContentFilter(
         threshold=0.5,
@@ -37,6 +40,24 @@ config=CrawlerRunConfig(
             markdown_generator=markdown_generator,
     )
 feed_dir=BASE_DIR/"Feed"
+
+def build_and_save_bm25(chunks, path):
+    tokenized_documents = [
+        re.findall(
+            r"\b\w+\b",
+            chunk.page_content.lower()
+        )
+        for chunk in chunks
+    ]
+    bm25 = BM25Okapi(tokenized_documents)
+    with open(path, "wb") as f:
+        pickle.dump(
+            {
+                "documents": chunks,
+                "bm25": bm25
+            },
+            f
+        )
 async def website_crawl(url:str):
     try:
         
@@ -59,6 +80,8 @@ async def ingest_website(url:str):
         chunks=website_splitter.split(markdown)
         id=str(uuid.uuid4())
         feed_path=feed_dir/f"{id}"
+        bm25_path=feed_dir/f"{id}"/"bm25.pkl"
+        await asyncio.to_thread(build_and_save_bm25,chunks,bm25_path)
         feed_path.mkdir(parents=True,exist_ok=True)
         vectorstore=FAISS.from_documents(chunks,embedding_maker)
         vectorstore.save_local(str(feed_path))
