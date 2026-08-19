@@ -7,10 +7,11 @@ import asyncio
 import uuid
 import shutil
 import anyio
+import re
 from langchain_community.vectorstores import FAISS
 
 
-class Query:
+class SemanticQuery:
     def __init__(self,uuid:list[str]):
         self.uuid=uuid
 
@@ -28,5 +29,6 @@ class Query:
             result.sort(key=lambda x:x[1])
             return result[:top_k]
         return result
+    
 
         
