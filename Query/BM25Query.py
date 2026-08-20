@@ -8,6 +8,7 @@ class BM25:
     def __init__(self,uuids:list[str],query:str,top_k:int=6):
         self.uuids=uuids
         self.query=query
+        self.top_k=top_k
 
     async def tokenize(text:str):
         res=re.findall(r"\b\w+\b",text.lower())
@@ -28,12 +29,16 @@ class BM25:
         
     async def get_keyword_chunks_From_Feed(self):
         result=[]
+        paths=[]
         for uuid in self.uuids:
             feed_path=f"{BASE_DIR}/Feed/{uuid}"
             pathexsistence=Path(feed_path)
             if pathexsistence.exists()!=True :
                 raise FileNotFoundError(f"This Directory Do not Exists {feed_path}")
-            chunks=await asyncio.to_thread(self.loadandquery,self.query,feed_path)
+            paths.append(feed_path)
+        tasks=[asyncio.to_thread(self.loadandquery,self.query,path) for path in paths]
+        all_result=await asyncio.gather(*tasks)
+        for chunks in all_result:
             result.extend(chunks)
         if(len(result)>6):
             result.sort(key=lambda x:x[1],reverse=True)
