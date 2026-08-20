@@ -15,13 +15,13 @@ class SemanticQuery:
     def __init__(self,uuid:list[str]):
         self.uuid=uuid
 
-    def load_and_search(self,path):
+    def load_and_search(self,path,query):
         vectorstore = FAISS.load_local(
             path, embedder.model, allow_dangerous_deserialization=True
         )
-        return vectorstore.similarity_search_with_score(self.query, k=3)
+        return vectorstore.similarity_search_with_score(query, k=3)
     
-    async def get_semantic_chunks_fromFeed(self,per_uuid:int=5,top_k:int=5):
+    async def get_semantic_chunks_fromFeed(self,query:str,per_uuid:int=5,top_k:int=5):
         result=[]
         paths=[]
         for uuid in self.uuid:
@@ -30,7 +30,7 @@ class SemanticQuery:
             if pathexsistence.exists()!=True :
                 raise FileNotFoundError(f"This Directory Do not Exists {feed_path}")
             paths.append(feed_path)
-        tasks=[asyncio.to_thread(self.load_and_search,path) for path in paths]
+        tasks=[asyncio.to_thread(self.load_and_search,path,query) for path in paths]
         all_result=await asyncio.gather(*tasks)
         for chunks in all_result:
             result.extend(chunks)

@@ -5,9 +5,7 @@ import re
 import asyncio
 BASE_DIR=Path("Data").resolve()
 class BM25:
-    def __init__(self,uuids:list[str],query:str,top_k:int=6):
-        self.uuids=uuids
-        self.query=query
+    def __init__(self,top_k:int=6):
         self.top_k=top_k
 
     async def tokenize(text:str):
@@ -27,10 +25,10 @@ class BM25:
             for i in top_indices
         ]
         
-    async def get_keyword_chunks_From_Feed(self):
+    async def get_keyword_chunks_From_Feed(self,query:str,uuids:list[str]):
         result=[]
         paths=[]
-        for uuid in self.uuids:
+        for uuid in uuids:
             feed_path=f"{BASE_DIR}/Feed/{uuid}"
             pathexsistence=Path(feed_path)
             if pathexsistence.exists()!=True :
