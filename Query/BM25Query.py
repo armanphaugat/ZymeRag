@@ -29,8 +29,11 @@ class BM25:
     async def get_keyword_chunks_From_Feed(self):
         result=[]
         for uuid in self.uuids:
-            bm25_path=f"{BASE_DIR}/Feed/{uuid}/bm25.pkl"
-            chunks=await asyncio.to_thread(self.loadandquery,self.query,bm25_path)
+            feed_path=f"{BASE_DIR}/Feed/{uuid}"
+            pathexsistence=Path(feed_path)
+            if pathexsistence.exists()!=True :
+                raise FileNotFoundError(f"This Directory Do not Exists {feed_path}")
+            chunks=await asyncio.to_thread(self.loadandquery,self.query,feed_path)
             result.extend(chunks)
         if(len(result)>6):
             result.sort(key=lambda x:x[1],reverse=True)

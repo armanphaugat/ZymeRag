@@ -18,6 +18,10 @@ class SemanticQuery:
     async def get_semantic_chunks_fromFeed(self,per_uuid:int=5,top_k:int=5):
         result=[]
         for uuid in self.uuid:
+            feed_path=f"{BASE_DIR}/Feed/{uuid}"
+            pathexsistence=Path(feed_path)
+            if pathexsistence.exists()!=True :
+                raise FileNotFoundError(f"This Directory Do not Exists {feed_path}")
             vectorstore=FAISS.load_local(
                 f"Data/Feed/{uuid}",
                 embedder.model,
