@@ -32,9 +32,8 @@ class SemanticQuery:
         for chunks in all_result:
             result.extend(chunks)
         if(len(result)>6):
-            result.sort(key=lambda x:x[1])
-            return result[:top_k]
-        return result
+            result.sort(key=lambda x: x[1])
+        return result[:top_k]
     
 
         
