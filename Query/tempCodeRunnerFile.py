@@ -4,24 +4,27 @@ embedder=Embedder()
 from pathlib import Path
 BASE_DIR=Path("Data").resolve()
 import asyncio
-
+import uuid
+import shutil
+import anyio
+import re
 from langchain_community.vectorstores import FAISS
 
 
 class SemanticQuery:
-    def __init__(self):
-        pass
+    def __init__(self,uuid:list[str]):
+        self.uuid=uuid
 
     def load_and_search(self,path,query):
         vectorstore = FAISS.load_local(
             path, embedder.model, allow_dangerous_deserialization=True
         )
-        return vectorstore.similarity_search_with_score(query, k=6)
+        return vectorstore.similarity_search_with_score(query, k=3)
     
-    async def get_semantic_chunks_fromFeed(self,query:str,uuids:list[str],top_k:int=5):
+    async def get_semantic_chunks_fromFeed(self,query:str,per_uuid:int=5,top_k:int=5):
         result=[]
         paths=[]
-        for uuid in uuids:
+        for uuid in self.uuid:
             feed_path=f"{BASE_DIR}/Feed/{uuid}"
             pathexsistence=Path(feed_path)
             if pathexsistence.exists()!=True :

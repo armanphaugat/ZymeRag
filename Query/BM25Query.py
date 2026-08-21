@@ -8,11 +8,11 @@ class BM25:
     def __init__(self,top_k:int=6):
         self.top_k=top_k
 
-    async def tokenize(text:str):
+    def tokenize(self,text:str):
         res=re.findall(r"\b\w+\b",text.lower())
         return res
 
-    async def loadandquery(self,query:str,path:str,k:int=6):
+    def loadandquery(self,query:str,path:str,k:int=6):
         with open(path,"rb") as f:
             data=pickle.load(f)
         documents=data["documents"]
@@ -34,7 +34,7 @@ class BM25:
             if pathexsistence.exists()!=True :
                 raise FileNotFoundError(f"This Directory Do not Exists {feed_path}")
             paths.append(feed_path)
-        tasks=[asyncio.to_thread(self.loadandquery,self.query,path) for path in paths]
+        tasks=[asyncio.to_thread(self.loadandquery,query,path) for path in paths]
         all_result=await asyncio.gather(*tasks)
         for chunks in all_result:
             result.extend(chunks)
