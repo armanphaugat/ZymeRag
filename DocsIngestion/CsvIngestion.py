@@ -36,10 +36,8 @@ async def ingestCsv(file, name: str):
         id = str(uuid.uuid4())
         content_path = content_dir / f"{id}"
         await asyncio.to_thread(content_path.mkdir, parents=True, exist_ok=True)
-
         chunks = await asyncio.to_thread(_csv_to_documents_sync, csv_bytes)
         await asyncio.to_thread(_build_and_save_index_sync, chunks, content_path)
-
         database_saved = await save_content_to_database(name, id)
         if database_saved:
             print(f"CSV ingested and saved to database with ID: {id}")
