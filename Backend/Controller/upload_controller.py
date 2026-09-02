@@ -15,6 +15,7 @@ ALLOWED_EXTENSIONS = {
 }
 from fastapi import File, Form, HTTPException, Query, UploadFile, Depends
 from DocsIngestion.PdfIngestion import ingestpdf
+from DocsIngestion.ImageIngestion import ingestimage
 idempotent_keys={}
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
@@ -24,6 +25,8 @@ async def upload_pdf(file: UploadFile = File(...), name: str = Form(...), idempo
             if idempotent_key:
                 if idempotent_key in idempotent_keys:
                     return {"message": "Duplicate request", "id": idempotent_keys[idempotent_key]}
+        if file.content_type not in ["application/pdf"]:
+            raise HTTPException(status_code=400, detail="Invalid file type. Only PDF files are allowed.")
         idempotent_keys[idempotent_key]=1
         upload_id_pdf=await ingestpdf(file,name)
         if upload_id_pdf is None:
@@ -32,3 +35,49 @@ async def upload_pdf(file: UploadFile = File(...), name: str = Form(...), idempo
         return {"message": "PDF uploaded successfully", "id": upload_id_pdf}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def upload_docx(file: UploadFile = File(...), name: str = Form(...), idempotent_key: Optional[str] = Form(None)):
+    try:
+        async with lock:
+            if idempotent_key:
+                if idempotent_key in idempotent_keys:
+                    return {"message": "Duplicate request", "id": idempotent_keys[idempotent_key]}
+        if file.content_type not in ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]:
+            raise HTTPException(status_code=400, detail="Invalid file type. Only DOCX files are allowed.")
+        idempotent_keys[idempotent_key]=1
+        file_size_bytes=file.size
+        file_size_mb = file_size_bytes / (1024 * 1024)
+        if file_size_mb > 10:
+            idempotent_keys.pop(idempotent_key, None)
+            raise HTTPException(status_code=400, detail="File size exceeds the maximum limit of 10MB")
+        upload_id_docx=await ingestpdf(file,name)
+        if upload_id_docx is None:
+            idempotent_keys.pop(idempotent_key, None)
+            raise HTTPException(status_code=400, detail="Failed to upload docx")
+        return {"message": "docx uploaded successfully", "id": upload_id_docx}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def upload_image(file: UploadFile = File(...), name: str = Form(...), idempotent_key: Optional[str] = Form(None)):
+    try:
+        async with lock:
+            if idempotent_key:
+                if idempotent_key in idempotent_keys:
+                    return {"message": "Duplicate request", "id": idempotent_keys[idempotent_key]}
+        if file.content_type not in ["image/jpeg","image/png"]:
+            raise HTTPException(status_code=400, detail="Invalid file type. Only JPEG and PNG images are allowed.")
+        idempotent_keys[idempotent_key]=1
+        file_size_bytes=file.size
+        file_size_mb = file_size_bytes / (1024 * 1024)
+        if file_size_mb > 10:
+            idempotent_keys.pop(idempotent_key, None)
+            raise HTTPException(status_code=400, detail="File size exceeds the maximum limit of 10MB")
+        upload_id_image=await ingestimage(file,name)
+        if upload_id_image is None:
+            idempotent_keys.pop(idempotent_key, None)
+            raise HTTPException(status_code=400, detail="Failed to upload image")
+        return {"message": "image uploaded successfully", "id": upload_id_image}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
