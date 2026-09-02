@@ -5,7 +5,7 @@ import os
 from io import BytesIO
 from typing import List, Optional
 
-from DocsIngestion.AudioVideoIngestion import ingestaudio
+from DocsIngestion.AudioVideoIngestion import ingestaudio, ingestvideo
 lock = asyncio.Lock()
 URL_PATTERN = r"(https?://[^\s]+)"
 MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -125,5 +125,27 @@ async def upload_audio(file: UploadFile = File(...), name: str = Form(...), idem
             idempotent_keys.pop(idempotent_key, None)
             raise HTTPException(status_code=400, detail="Failed to upload audio")
         return {"message": "audio uploaded successfully", "id": upload_id_audio}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def upload_video(file: UploadFile = File(...), name: str = Form(...), idempotent_key: Optional[str] = Form(None)):
+    try:
+        async with lock:
+            if idempotent_key:
+                if idempotent_key in idempotent_keys:
+                    return {"message": "Duplicate request", "id": idempotent_keys[idempotent_key]}
+        if file.content_type not in ["video/mp4","video/x-m4v","video/quicktime"]:
+            raise HTTPException(status_code=400, detail="Invalid file type. Only MP4, M4V, and MOV video files are allowed.")
+        idempotent_keys[idempotent_key]=1
+        file_size_bytes=file.size
+        file_size_mb = file_size_bytes / (1024 * 1024)
+        if file_size_mb > 10:
+            idempotent_keys.pop(idempotent_key, None)
+            raise HTTPException(status_code=400, detail="File size exceeds the maximum limit of 10MB")
+        upload_id_video=await ingestvideo(file,name)
+        if upload_id_video is None:
+            idempotent_keys.pop(idempotent_key, None)
+            raise HTTPException(status_code=400, detail="Failed to upload video")
+        return {"message": "video uploaded successfully", "id": upload_id_video}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
