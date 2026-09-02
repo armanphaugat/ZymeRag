@@ -4,6 +4,8 @@ import sys
 import os
 from io import BytesIO
 from typing import List, Optional
+
+from DocsIngestion.AudioVideoIngestion import ingestaudio
 lock = asyncio.Lock()
 URL_PATTERN = r"(https?://[^\s]+)"
 MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -16,6 +18,7 @@ ALLOWED_EXTENSIONS = {
 from fastapi import File, Form, HTTPException, Query, UploadFile, Depends
 from DocsIngestion.PdfIngestion import ingestpdf
 from DocsIngestion.ImageIngestion import ingestimage
+from DocsIngestion.CsvIngestion import ingestCsv
 idempotent_keys={}
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
@@ -81,3 +84,46 @@ async def upload_image(file: UploadFile = File(...), name: str = Form(...), idem
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+async def upload_csv(file: UploadFile = File(...), name: str = Form(...), idempotent_key: Optional[str] = Form(None)):
+    try:
+        async with lock:
+            if idempotent_key:
+                if idempotent_key in idempotent_keys:
+                    return {"message": "Duplicate request", "id": idempotent_keys[idempotent_key]}
+        if file.content_type not in ["text/csv"]:
+            raise HTTPException(status_code=400, detail="Invalid file type. Only CSV files are allowed.")
+        idempotent_keys[idempotent_key]=1
+        file_size_bytes=file.size
+        file_size_mb = file_size_bytes / (1024 * 1024)
+        if file_size_mb > 10:
+            idempotent_keys.pop(idempotent_key, None)
+            raise HTTPException(status_code=400, detail="File size exceeds the maximum limit of 10MB")
+        upload_id_csv=await ingestCsv(file,name)
+        if upload_id_csv is None:
+            idempotent_keys.pop(idempotent_key, None)
+            raise HTTPException(status_code=400, detail="Failed to upload csv")
+        return {"message": "csv uploaded successfully", "id": upload_id_csv}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) 
+
+async def upload_audio(file: UploadFile = File(...), name: str = Form(...), idempotent_key: Optional[str] = Form(None)):
+    try:
+        async with lock:
+            if idempotent_key:
+                if idempotent_key in idempotent_keys:
+                    return {"message": "Duplicate request", "id": idempotent_keys[idempotent_key]}
+        if file.content_type not in ["audio/mpeg","audio/wav","audio/x-wav","audio/x-m4a"]:
+            raise HTTPException(status_code=400, detail="Invalid file type. Only MP3, WAV, and M4A audio files are allowed.")
+        idempotent_keys[idempotent_key]=1
+        file_size_bytes=file.size
+        file_size_mb = file_size_bytes / (1024 * 1024)
+        if file_size_mb > 10:
+            idempotent_keys.pop(idempotent_key, None)
+            raise HTTPException(status_code=400, detail="File size exceeds the maximum limit of 10MB")
+        upload_id_audio=await ingestaudio(file,name)
+        if upload_id_audio is None:
+            idempotent_keys.pop(idempotent_key, None)
+            raise HTTPException(status_code=400, detail="Failed to upload audio")
+        return {"message": "audio uploaded successfully", "id": upload_id_audio}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
