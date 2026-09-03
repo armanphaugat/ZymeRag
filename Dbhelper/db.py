@@ -1,9 +1,10 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from Dbhelper.config import ASYNC_DATABASE_URL
+from Dbhelper.models import Base
 
 engine = create_async_engine(
     ASYNC_DATABASE_URL,
-    pool_pre_ping=False,
+    pool_pre_ping=True,
     pool_size=20,
     max_overflow=40,
     pool_recycle=300,
@@ -17,5 +18,6 @@ AsyncDB = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession
 
 
 async def init_db():
-    """Placeholder init_db for async startup compatibility."""
-    pass
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+

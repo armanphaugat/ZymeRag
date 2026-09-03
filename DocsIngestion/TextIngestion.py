@@ -36,7 +36,7 @@ async def ingestText(text: str, name: str):
         else:
             chunks = [Document(page_content=text)]
         await asyncio.to_thread(_build_and_save_index_sync, chunks, content_path)
-        database_saved = await save_content_to_database(name, id)
+        database_saved = await save_content_to_database(name=name, content_id=id, doc_type="txt", chunks=len(chunks))
         if database_saved:
             print(f"Text ingested and saved to database with ID: {id}")
             return id

@@ -80,16 +80,16 @@ async def ingest_website(url:str):
         chunks=website_splitter.split(markdown)
         id=str(uuid.uuid4())
         feed_path=feed_dir/f"{id}"
-        bm25_path=feed_dir/f"{id}"/"bm25.pkl"
-        await asyncio.to_thread(build_and_save_bm25,chunks,bm25_path)
         feed_path.mkdir(parents=True,exist_ok=True)
+        bm25_path=feed_path/"bm25.pkl"
+        await asyncio.to_thread(build_and_save_bm25,chunks,bm25_path)
         vectorstore=FAISS.from_documents(chunks,embedding_maker)
         vectorstore.save_local(str(feed_path))
-        database_saved=await save_website_to_database(url,id)
+        database_saved = await save_website_to_database(url=url, feed_id=id, chunks=len(chunks))
         if database_saved:
             print(f"Website {url} ingested and saved to database with ID: {id}")
-            return None
-        return id
+            return id
+        return None
     else:
         print("No markdown content to process.")
         return None
@@ -106,8 +106,9 @@ async def update_website(url:str,id:str):
         if feed_path.exists():
             shutil.rmtree(feed_path)
         temp_path.rename(feed_path)
+        await update_website_last_crawled(feed_id=id, chunks=len(chunks))
         print(f"Website {url} updated and saved to database with ID: {id}")
-        return None
+        return id
     else:
         print("No markdown content to process.")
         return None
@@ -115,7 +116,7 @@ async def update_website(url:str,id:str):
 async def delete_website(id:str):
     try:
         feed_path=feed_dir/f"{id}"
-        if await feed_path.exists():
+        if feed_path.exists():
             await anyio.to_thread.run_sync(shutil.rmtree, feed_path)
             print(f"Feed with ID: {id} deleted successfully.")
             return True

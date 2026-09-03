@@ -61,7 +61,7 @@ async def ingestimage(file, name: str):
         chunks = await asyncio.to_thread(pdf_splitter.split, text)
         await asyncio.to_thread(_build_and_save_index_sync, chunks, content_path)
 
-        database_saved = await save_content_to_database(name, id)
+        database_saved = await save_content_to_database(name=name, content_id=id, doc_type="image", chunks=len(chunks))
         if database_saved:
             print(f"Image ingested and saved to database with ID: {id}")
             return id

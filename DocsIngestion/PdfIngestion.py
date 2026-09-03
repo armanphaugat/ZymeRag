@@ -45,7 +45,7 @@ async def ingest_pdf(file, name: str):
         content_path = content_dir / f"{id}"
         await asyncio.to_thread(content_path.mkdir, parents=True, exist_ok=True)
         await asyncio.to_thread(_build_and_save_index_sync, chunks, content_path)
-        database_saved = await save_content_to_database(name, id)
+        database_saved = await save_content_to_database(name=name, content_id=id, doc_type="pdf", chunks=len(chunks))
         if database_saved:
             print(f"Pdf ingested and saved to database with ID: {id}")
             return id
