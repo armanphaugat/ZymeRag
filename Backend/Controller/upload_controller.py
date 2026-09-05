@@ -16,7 +16,7 @@ ALLOWED_EXTENSIONS = {
     ".xlsx", ".xls",
 }
 from fastapi import File, Form, HTTPException, Query, UploadFile, Depends
-from DocsIngestion.PdfIngestion import ingestpdf
+from DocsIngestion.PdfIngestion import ingest_pdf
 from DocsIngestion.ImageIngestion import ingestimage
 from DocsIngestion.CsvIngestion import ingestCsv
 idempotent_keys={}
@@ -31,7 +31,7 @@ async def upload_pdf(file: UploadFile = File(...), name: str = Form(...), idempo
         if file.content_type not in ["application/pdf"]:
             raise HTTPException(status_code=400, detail="Invalid file type. Only PDF files are allowed.")
         idempotent_keys[idempotent_key]=1
-        upload_id_pdf=await ingestpdf(file,name)
+        upload_id_pdf=await ingest_pdf(file, name)
         if upload_id_pdf is None:
             idempotent_keys.pop(idempotent_key, None)
             raise HTTPException(status_code=400, detail="Failed to upload PDF")
@@ -54,7 +54,7 @@ async def upload_docx(file: UploadFile = File(...), name: str = Form(...), idemp
         if file_size_mb > 10:
             idempotent_keys.pop(idempotent_key, None)
             raise HTTPException(status_code=400, detail="File size exceeds the maximum limit of 10MB")
-        upload_id_docx=await ingestpdf(file,name)
+        upload_id_docx=await ingest_pdf(file, name)
         if upload_id_docx is None:
             idempotent_keys.pop(idempotent_key, None)
             raise HTTPException(status_code=400, detail="Failed to upload docx")
