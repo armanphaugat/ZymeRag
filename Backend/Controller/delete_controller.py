@@ -8,7 +8,8 @@ from typing import List, Optional
 
 from fastapi import Form, HTTPException
 
-from Dbhelper.website_db_helper import delete_website_from_database,delete_content_from_database
+from Dbhelper.website_db_helper import delete_website_from_database
+from Dbhelper.pdf_db_helper import delete_content_from_database
 
 def background_delete_content(path:str):
     try:
