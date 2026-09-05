@@ -10,7 +10,7 @@ from crawl4ai import (
     CrawlerRunConfig,
     CacheMode,
 )
-from Dbhelper.website_db_helper import save_website_to_database
+from Dbhelper.website_db_helper import save_website_to_database,update_website_last_crawled
 from crawl4ai.content_filter_strategy import (
     PruningContentFilter
 )
