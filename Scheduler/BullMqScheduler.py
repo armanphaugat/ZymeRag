@@ -5,7 +5,7 @@ import sys
 from bullmq import Queue, Worker
 from WebsiteIngestion.websiteingestion import update_website
 from Dbhelper.website_db_helper import get_urls_from_database
-
+from filelock import FileLock
 connection = {
     "host": os.getenv("REDIS_HOST", "localhost"),
     "port": int(os.getenv("REDIS_PORT", 6379)),

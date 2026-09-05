@@ -101,11 +101,11 @@ async def update_website(url:str,id:str):
         feed_path=feed_dir/f"{id}"
         temp_path=feed_dir/f"{id}__temp"
         temp_path.mkdir(parents=True,exist_ok=True)
-        vectorstore=FAISS.from_documents(chunks,embedding_maker)
-        vectorstore.save_local(str(temp_path))
+        vectorstore=await asyncio.to_thread(FAISS.from_documents, chunks, embedding_maker)
+        await asyncio.to_thread(vectorstore.save_local, str(temp_path))
         if feed_path.exists():
-            shutil.rmtree(feed_path)
-        temp_path.rename(feed_path)
+            await asyncio.to_thread(shutil.rmtree, feed_path)
+        await asyncio.to_thread(temp_path.rename, feed_path)
         await update_website_last_crawled(feed_id=id, chunks=len(chunks))
         print(f"Website {url} updated and saved to database with ID: {id}")
         return id

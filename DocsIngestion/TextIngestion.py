@@ -5,7 +5,6 @@ import shutil
 from pathlib import Path as SyncPath
 import anyio
 
-from Dbhelper.website_db_helper import save_pdf_to_database
 from Splitter.PdfSplitter import PdfTextSplitter
 import uuid
 from Embeddings.Embeddingmaker import Embedder
