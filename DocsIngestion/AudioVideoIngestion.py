@@ -5,8 +5,6 @@ import uuid
 from pathlib import Path as SyncPath
 
 import ffmpeg
-from faster_whisper import WhisperModel
-
 from Dbhelper.pdf_db_helper import save_content_to_database
 from Splitter.PdfSplitter import PdfTextSplitter
 from Embeddings.Embeddingmaker import Embedder
@@ -17,15 +15,22 @@ content_dir = BASE_DIR / "Content"
 pdf_splitter = PdfTextSplitter()
 embedding_maker = Embedder()
 
-whisper_model = WhisperModel(
-    "medium",
-    device="cuda",
-    compute_type="float16",   
-)
+_whisper_model = None
+
+def get_whisper_model():
+    global _whisper_model
+    if _whisper_model is None:
+        from faster_whisper import WhisperModel
+        import torch
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        compute_type = "float16" if device == "cuda" else "int8"
+        _whisper_model = WhisperModel("medium", device=device, compute_type=compute_type)
+    return _whisper_model
 
 
 def transcribe_audio_file(audio_path: str) -> str:
-    segments, _info = whisper_model.transcribe(audio_path, beam_size=5)
+    model = get_whisper_model()
+    segments, _info = model.transcribe(audio_path, beam_size=5)
     texts = [segment.text.strip() for segment in segments]
     return "\n".join(t for t in texts if t)
 

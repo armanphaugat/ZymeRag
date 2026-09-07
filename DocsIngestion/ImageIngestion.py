@@ -8,30 +8,43 @@ import numpy as np
 from Splitter.PdfSplitter import PdfTextSplitter
 import uuid
 from Embeddings.Embeddingmaker import Embedder
-from langchain_community.vectorstores import FAISS
-from docling.document_converter import DocumentConverter
 from Dbhelper.pdf_db_helper import save_content_to_database
-from paddleocr import PaddleOCR
 
 BASE_DIR = SyncPath("Data").resolve()
 content_dir = BASE_DIR / "Content"
-converter = DocumentConverter()
 pdf_splitter = PdfTextSplitter()
 embedding_maker = Embedder()
 
-ocr = PaddleOCR(
-    lang="en",
-    use_doc_orientation_classify=False,
-    use_doc_unwarping=True,
-    use_textline_orientation=False,
-    device="gpu"
-)
+_ocr_engine = None
+
+def get_ocr_engine():
+    global _ocr_engine
+    if _ocr_engine is None:
+        try:
+            from paddleocr import PaddleOCR
+            import torch
+            device = "gpu" if torch.cuda.is_available() else "cpu"
+            _ocr_engine = PaddleOCR(
+                lang="en",
+                use_doc_orientation_classify=False,
+                use_doc_unwarping=True,
+                use_textline_orientation=False,
+                device=device
+            )
+        except Exception:
+            _ocr_engine = False
+    return _ocr_engine
 
 
 def ocr_doing(image_bytes: bytes):
+    engine = get_ocr_engine()
+    if not engine:
+        import pytesseract
+        image = Image.open(BytesIO(image_bytes)).convert("RGB")
+        return pytesseract.image_to_string(image)
     image = Image.open(BytesIO(image_bytes)).convert("RGB")
-    image = np.array(image)
-    result = ocr.predict(image)
+    image_np = np.array(image)
+    result = engine.predict(image_np)
     texts = []
     for res in result:
         data = res.json["res"]

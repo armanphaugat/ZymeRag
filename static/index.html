@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZymeRag - Document Ingestion & Testing Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-wrapper">
+        <!-- Top Ambient Glows -->
+        <div class="ambient-glow glow-1"></div>
+        <div class="ambient-glow glow-2"></div>
+
+        <!-- Header Navbar -->
+        <header class="navbar">
+            <div class="nav-brand">
+                <div class="brand-logo">
+                    <span class="logo-spark">⚡</span>
+                </div>
+                <div class="brand-titles">
+                    <div class="brand-name">ZymeRag <span class="badge-version">v1.0</span></div>
+                    <span class="brand-sub">Ingestion & RAG API Test Suite</span>
+                </div>
+            </div>
+
+            <div class="nav-actions">
+                <div class="api-base-bar">
+                    <span class="server-label">Backend URL</span>
+                    <input type="text" id="serverUrlInput" value="http://localhost:8000" placeholder="http://localhost:8000">
+                    <button id="pingBtn" class="btn btn-glass btn-sm" title="Check Connection">
+                        <span class="pulse-dot" id="statusDot"></span>
+                        <span id="statusText">Check API</span>
+                    </button>
+                </div>
+                <a href="http://localhost:8000/docs" target="_blank" class="btn btn-outline btn-sm">
+                    <span>Swagger API</span>
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                </a>
+            </div>
+        </header>
+
+        <!-- Top Analytics Metrics Bar -->
+        <section class="analytics-bar">
+            <div class="metric-card">
+                <div class="metric-icon icon-purple">📥</div>
+                <div class="metric-info">
+                    <span class="metric-label">Total Ingested</span>
+                    <span class="metric-value" id="statTotalIngested">0</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon icon-green">✅</div>
+                <div class="metric-info">
+                    <span class="metric-label">Success Rate</span>
+                    <span class="metric-value" id="statSuccessRate">100%</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon icon-blue">⚡</div>
+                <div class="metric-info">
+                    <span class="metric-label">Avg Latency</span>
+                    <span class="metric-value" id="statAvgLatency">-- ms</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon icon-amber">🔌</div>
+                <div class="metric-info">
+                    <span class="metric-label">Active Endpoints</span>
+                    <span class="metric-value">6 Routes</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Navigation Tabs -->
+        <nav class="tabs-nav">
+            <button class="tab-btn active" data-tab="uploadTab">
+                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                Document Ingestion
+            </button>
+            <button class="tab-btn" data-tab="deleteTab">
+                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                Delete Content
+            </button>
+            <button class="tab-btn" data-tab="logsTab">
+                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                API Activity Logs
+                <span class="tab-counter" id="logTabCounter">0</span>
+            </button>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="content-body">
+            <!-- TAB 1: UPLOAD INGESTION -->
+            <section id="uploadTab" class="tab-content active">
+                <div class="grid-container">
+                    <!-- Left Panel: Endpoint Selector & Upload Form -->
+                    <div class="panel main-panel">
+                        <div class="panel-header">
+                            <div>
+                                <h2>File Ingestion Console</h2>
+                                <p class="panel-subtitle">Upload files for document splitting, embedding generation, and vector database indexing.</p>
+                            </div>
+                        </div>
+
+                        <!-- Visual Endpoint Cards Grid -->
+                        <div class="endpoint-grid-title">Select Ingestion Endpoint</div>
+                        <div class="endpoint-grid">
+                            <div class="endpoint-card active" data-endpoint="/upload/upload_pdf" data-type="pdf">
+                                <div class="ep-icon">📄</div>
+                                <div class="ep-details">
+                                    <span class="ep-name">PDF Document</span>
+                                    <span class="ep-route">/upload/upload_pdf</span>
+                                </div>
+                            </div>
+
+                            <div class="endpoint-card" data-endpoint="/upload/upload_docx" data-type="docx">
+                                <div class="ep-icon">📝</div>
+                                <div class="ep-details">
+                                    <span class="ep-name">DOCX Document</span>
+                                    <span class="ep-route">/upload/upload_docx</span>
+                                </div>
+                            </div>
+
+                            <div class="endpoint-card" data-endpoint="/upload/upload_image" data-type="image">
+                                <div class="ep-icon">🖼️</div>
+                                <div class="ep-details">
+                                    <span class="ep-name">Image File</span>
+                                    <span class="ep-route">/upload/upload_image</span>
+                                </div>
+                            </div>
+
+                            <div class="endpoint-card" data-endpoint="/upload/upload_csv" data-type="csv">
+                                <div class="ep-icon">📊</div>
+                                <div class="ep-details">
+                                    <span class="ep-name">CSV / Spreadsheet</span>
+                                    <span class="ep-route">/upload/upload_csv</span>
+                                </div>
+                            </div>
+
+                            <div class="endpoint-card" data-endpoint="/upload/upload_audio" data-type="audio">
+                                <div class="ep-icon">🎵</div>
+                                <div class="ep-details">
+                                    <span class="ep-name">Audio File</span>
+                                    <span class="ep-route">/upload/upload_audio</span>
+                                </div>
+                            </div>
+
+                            <div class="endpoint-card" data-endpoint="/upload/upload_video" data-type="video">
+                                <div class="ep-icon">🎬</div>
+                                <div class="ep-details">
+                                    <span class="ep-name">Video File</span>
+                                    <span class="ep-route">/upload/upload_video</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Dropzone Area -->
+                        <div class="dropzone-container">
+                            <div class="dropzone" id="dropzone">
+                                <input type="file" id="fileInput" class="file-input">
+                                <div class="dropzone-body">
+                                    <div class="upload-cloud-icon">
+                                        <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                                    </div>
+                                    <h3>Drag & Drop file to start ingestion</h3>
+                                    <p>or <span class="highlight-link">browse files on your system</span></p>
+                                    <div class="format-chips">
+                                        <span class="chip">PDF</span>
+                                        <span class="chip">DOCX</span>
+                                        <span class="chip">PNG/JPG</span>
+                                        <span class="chip">CSV</span>
+                                        <span class="chip">MP3/WAV</span>
+                                        <span class="chip">MP4</span>
+                                        <span class="chip-limit">Max 10MB</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Selected File Details Banner -->
+                            <div class="selected-file-card hidden" id="filePreviewBanner">
+                                <div class="file-thumb" id="fileIconBox">📄</div>
+                                <div class="file-info-main">
+                                    <div class="file-title" id="previewFileName">filename.pdf</div>
+                                    <div class="file-meta-row">
+                                        <span id="previewFileSize">0 KB</span> • 
+                                        <span id="previewFileType">application/pdf</span>
+                                    </div>
+                                </div>
+                                <span class="detected-badge" id="detectedEndpointBadge">PDF Endpoint</span>
+                                <button type="button" class="btn-icon-danger" id="removeFileBtn" title="Remove File">✕</button>
+                            </div>
+                        </div>
+
+                        <!-- Upload Configuration Form -->
+                        <form id="uploadForm" class="upload-form">
+                            <div class="form-row">
+                                <div class="field-group">
+                                    <label for="docNameInput">Document Name <span class="req">*</span></label>
+                                    <input type="text" id="docNameInput" placeholder="e.g. Q3 Financial Operations Report" required>
+                                </div>
+                                <div class="field-group">
+                                    <div class="label-with-btn">
+                                        <label for="idempotentKeyInput">Idempotent Key <span class="opt">(Optional)</span></label>
+                                        <button type="button" id="genUuidBtn" class="btn-link">Generate UUID</button>
+                                    </div>
+                                    <input type="text" id="idempotentKeyInput" placeholder="e.g. 550e8400-e29b-41d4-a716-446655440000">
+                                </div>
+                            </div>
+
+                            <div class="form-submit-row">
+                                <button type="submit" id="submitUploadBtn" class="btn btn-primary btn-lg" disabled>
+                                    <span id="uploadBtnSpinner" class="spinner hidden"></span>
+                                    <span id="uploadBtnText">🚀 Execute Ingestion</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Right Panel: API Response & History -->
+                    <div class="panel side-panel">
+                        <!-- API Response Box -->
+                        <div class="card card-response">
+                            <div class="card-title-bar">
+                                <div class="title-left">
+                                    <h3>API Response JSON</h3>
+                                    <span id="responseStatusBadge" class="status-badge status-idle">Ready</span>
+                                </div>
+                                <span id="responseTime" class="latency-tag">-- ms</span>
+                            </div>
+
+                            <div class="code-viewer-container">
+                                <div class="code-viewer-header">
+                                    <span class="code-lang">JSON</span>
+                                    <button id="copyJsonBtn" class="btn-icon-sm" title="Copy JSON">📋 Copy</button>
+                                </div>
+                                <pre id="jsonResponseViewer" class="code-block"><code class="json-code">// Upload a document to view real-time API response payload...</code></pre>
+                            </div>
+
+                            <div class="action-buttons-row hidden" id="quickActionBar">
+                                <button id="copyIdBtn" class="btn btn-secondary btn-sm">📋 Copy Generated ID</button>
+                                <button id="deleteIngestedBtn" class="btn btn-danger-outline btn-sm">🗑️ Delete Content</button>
+                            </div>
+                        </div>
+
+                        <!-- Session History List -->
+                        <div class="card card-history">
+                            <div class="card-title-bar">
+                                <h3>Ingestion Session History</h3>
+                                <button id="clearHistoryBtn" class="btn-link">Clear</button>
+                            </div>
+                            <div id="historyList" class="history-list">
+                                <div class="empty-history">
+                                    <div class="empty-icon">📂</div>
+                                    <p>No documents uploaded in this session yet.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: DELETE CONTENT -->
+            <section id="deleteTab" class="tab-content">
+                <div class="delete-workspace">
+                    <div class="panel delete-panel">
+                        <div class="panel-header">
+                            <div>
+                                <h2>Delete Ingested Content</h2>
+                                <p class="panel-subtitle">Permanently purge indexed documents, vector chunks, directory files (`Data/Content/` or `Data/Feed/`), and database records.</p>
+                            </div>
+                        </div>
+
+                        <div class="warning-box">
+                            <div class="warning-icon">⚠️</div>
+                            <div class="warning-text">
+                                <strong>Destructive Operation:</strong> This action permanently removes stored content files and associated Supabase database entries (`contents` or `feeds` table).
+                            </div>
+                        </div>
+
+                        <form id="deleteForm" class="delete-form">
+                            <div class="field-group">
+                                <label for="deleteIdInput">Document / Feed Content ID (UUID) <span class="req">*</span></label>
+                                <div class="input-action-pair">
+                                    <input type="text" id="deleteIdInput" placeholder="Enter UUID (e.g. c8b940e7-73d8-4f1a-b620-802d2bc4a54c)" required>
+                                    <button type="submit" id="submitDeleteBtn" class="btn btn-danger">
+                                        <span id="deleteBtnSpinner" class="spinner hidden"></span>
+                                        <span>🗑️ Delete Content</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+
+                        <div class="delete-result-box">
+                            <div class="card-title-bar">
+                                <h3>Deletion Status</h3>
+                                <span id="deleteStatusBadge" class="status-badge status-idle">Ready</span>
+                            </div>
+                            <div class="code-viewer-container">
+                                <pre id="deleteJsonViewer" class="code-block"><code class="json-code">// Execute a deletion request to view API results...</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 3: API ACTIVITY LOGS -->
+            <section id="logsTab" class="tab-content">
+                <div class="panel logs-panel">
+                    <div class="panel-header logs-header-flex">
+                        <div>
+                            <h2>Real-time API Activity Logs</h2>
+                            <p class="panel-subtitle">Inspect request payloads, HTTP status codes, latency timings, and curl equivalents.</p>
+                        </div>
+                        <div class="logs-controls">
+                            <input type="text" id="logSearchInput" placeholder="Filter by endpoint or status..." class="log-search-input">
+                            <button id="clearLogsBtn" class="btn btn-secondary btn-sm">Clear Logs</button>
+                        </div>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table class="logs-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Method</th>
+                                    <th>Endpoint</th>
+                                    <th>Status</th>
+                                    <th>Latency</th>
+                                    <th>Response Preview</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logsTableBody">
+                                <tr>
+                                    <td colspan="7" class="empty-logs">No API activity recorded in this session. Perform an upload or deletion test above.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast" class="toast hidden">
+        <span id="toastIcon">ℹ️</span>
+        <span id="toastMessage">Notification message</span>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

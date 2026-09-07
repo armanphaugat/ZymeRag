@@ -8,20 +8,29 @@ from Splitter.PdfSplitter import PdfTextSplitter
 import uuid
 from Embeddings.Embeddingmaker import Embedder
 from langchain_community.vectorstores import FAISS
-from docling.document_converter import DocumentConverter
+try:
+    from docling.document_converter import DocumentConverter
+    converter = DocumentConverter()
+except ImportError:
+    converter = None
+
 from Dbhelper.pdf_db_helper import save_content_to_database
 
 BASE_DIR = SyncPath("Data").resolve()
 content_dir = BASE_DIR / "Content"
-converter = DocumentConverter()
 pdf_splitter = PdfTextSplitter()
 embedding_maker = Embedder()
 
 
 def _convert_pdf_sync(stream: BytesIO):
-    result = converter.convert(stream)
-    documents = result.document
-    return documents.export_to_markdown()
+    if converter is not None:
+        result = converter.convert(stream)
+        documents = result.document
+        return documents.export_to_markdown()
+    import fitz  # PyMuPDF fallback
+    doc = fitz.open(stream=stream.getvalue(), filetype="pdf")
+    text = "\n".join(page.get_text() for page in doc)
+    return text
 
 
 async def read_text_from_pdf(file):
