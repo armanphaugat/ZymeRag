@@ -11,7 +11,6 @@ from Embeddings.Embeddingmaker import Embedder
 from langchain_community.vectorstores import FAISS
 from docling.document_converter import DocumentConverter
 from Dbhelper.pdf_db_helper import save_content_to_database
-from paddleocr import PaddleOCR
 
 BASE_DIR = SyncPath("Data").resolve()
 content_dir = BASE_DIR / "Content"
@@ -19,16 +18,30 @@ converter = DocumentConverter()
 pdf_splitter = PdfTextSplitter()
 embedding_maker = Embedder()
 
-ocr = PaddleOCR(
-    lang="en",
-    use_doc_orientation_classify=False,
-    use_doc_unwarping=True,
-    use_textline_orientation=False,
-    device="gpu"
-)
+_ocr = None
+
+
+def get_ocr():
+    global _ocr
+    if _ocr is None:
+        from paddleocr import PaddleOCR
+        try:
+            import torch
+            device = "gpu" if torch.cuda.is_available() else "cpu"
+        except Exception:
+            device = "cpu"
+        _ocr = PaddleOCR(
+            lang="en",
+            use_doc_orientation_classify=False,
+            use_doc_unwarping=True,
+            use_textline_orientation=False,
+            device=device
+        )
+    return _ocr
 
 
 def ocr_doing(image_bytes: bytes):
+    ocr = get_ocr()
     image = Image.open(BytesIO(image_bytes)).convert("RGB")
     image = np.array(image)
     result = ocr.predict(image)
@@ -41,7 +54,7 @@ def ocr_doing(image_bytes: bytes):
 
 async def read_text_from_image(file):
     image_bytes = await file.read()
-    result = await asyncio.to_thread(ocr_doing, image_bytes)  # fixed: pass raw bytes, not a BytesIO
+    result = await asyncio.to_thread(ocr_doing, image_bytes)
     return result
 
 

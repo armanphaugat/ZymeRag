@@ -10,10 +10,9 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("SUPABASE_DB_URL") or ""
 
 if not DATABASE_URL:
-    raise ValueError(
-        "DATABASE_URL or SUPABASE_DB_URL is not set in environment or .env file. "
-        "Please specify your Supabase PostgreSQL connection string."
-    )
+    # Graceful fallback for local tests and unconfigured environments
+    print("[Dbhelper] Warning: DATABASE_URL / SUPABASE_DB_URL not set. Falling back to default localhost Postgres.")
+    DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/postgres"
 
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)

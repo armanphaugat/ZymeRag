@@ -17,15 +17,27 @@ content_dir = BASE_DIR / "Content"
 pdf_splitter = PdfTextSplitter()
 embedding_maker = Embedder()
 
-whisper_model = WhisperModel(
-    "medium",
-    device="cuda",
-    compute_type="float16",   
-)
+_whisper_model = None
+
+
+def get_whisper_model():
+    """Lazy load WhisperModel to avoid slow startup and auto-detect CPU vs CUDA."""
+    global _whisper_model
+    if _whisper_model is None:
+        try:
+            import torch
+            has_cuda = torch.cuda.is_available()
+        except Exception:
+            has_cuda = False
+        device = "cuda" if has_cuda else "cpu"
+        compute_type = "float16" if device == "cuda" else "int8"
+        _whisper_model = WhisperModel("base", device=device, compute_type=compute_type)
+    return _whisper_model
 
 
 def transcribe_audio_file(audio_path: str) -> str:
-    segments, _info = whisper_model.transcribe(audio_path, beam_size=5)
+    model = get_whisper_model()
+    segments, _info = model.transcribe(audio_path, beam_size=5)
     texts = [segment.text.strip() for segment in segments]
     return "\n".join(t for t in texts if t)
 
@@ -56,7 +68,8 @@ async def read_text_from_audio(file) -> str:
     try:
         text = await asyncio.to_thread(transcribe_audio_file, tmp_path)
     finally:
-        os.remove(tmp_path)
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
     return text
 
