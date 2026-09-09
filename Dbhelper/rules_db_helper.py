@@ -59,7 +59,7 @@ async def get_rules(status: Optional[str] = None) -> List[Dict[str, Any]]:
                        r.source_clause, r.status, r.approved_by, r.approved_at, r.created_at,
                        u.name as document_name
                 FROM rules r
-                LEFT JOIN uploads u ON r.source_document = u.content_id
+                LEFT JOIN contents u ON r.source_document = u.content_id
             """
             params = {}
             if status:
@@ -179,7 +179,7 @@ async def get_approved_rules_for_action(flow_id: str, tool: str, operation: str)
                       AND (scope->>'tool' = :tool OR scope->>'tool' = '*' OR scope->>'tool' IS NULL)
                       AND (scope->>'operation' = :operation OR scope->>'operation' = '*' OR scope->>'operation' IS NULL)
                 """),
-                {"flow_id": flow_id, "tool": tool, "op": operation},
+                {"flow_id": flow_id, "tool": tool, "operation": operation},
             )
             return [dict(row) for row in result.mappings().fetchall()]
     except Exception as e:

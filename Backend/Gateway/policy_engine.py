@@ -58,7 +58,14 @@ def evaluate_condition(condition: Dict[str, Any], arguments: Dict[str, Any]) -> 
             return float(actual_value) < float(target_value)
         elif operator in ("<=", "lte"):
             return float(actual_value) <= float(target_value)
-        elif operator in ("in",):
+        elif operator in ("in", "between"):
+            if isinstance(target_value, (list, tuple)) and len(target_value) == 2 and all(isinstance(x, (int, float)) for x in target_value):
+                try:
+                    val = float(actual_value)
+                    low, high = sorted([float(target_value[0]), float(target_value[1])])
+                    return low <= val <= high
+                except (ValueError, TypeError):
+                    pass
             if isinstance(target_value, (list, tuple, set, str)):
                 return actual_value in target_value
             return False

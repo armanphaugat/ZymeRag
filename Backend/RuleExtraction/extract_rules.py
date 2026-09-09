@@ -1,3 +1,6 @@
+import asyncio
+from dotenv import load_dotenv
+load_dotenv()
 import json
 import os
 import re
@@ -9,20 +12,26 @@ from pydantic import BaseModel, Field, ValidationError
 from Dbhelper.rules_db_helper import save_rule
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-GROQ_MODEL = os.getenv("GROQ_EXTRACTION_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL = os.getenv("GROQ_EXTRACTION_MODEL", "qwen/qwen3.6-27b")
+FALLBACK_MODELS = [
+    "qwen/qwen3.6-27b",
+    "openai/gpt-oss-20b",
+    "groq/compound-mini",
+    "qwen/qwen3.8-27b"
+]
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
 class RuleScope(BaseModel):
-    tool: str = Field(..., description="Target tool name, e.g. 'crm', 'payment', 'email'")
-    operation: str = Field(..., description="Target operation, e.g. 'transfer_funds', 'delete_customer'")
+    tool: Optional[str] = Field(None, description="Target tool name, e.g. 'crm', 'payment', 'email'")
+    operation: Optional[str] = Field(None, description="Target operation, e.g. 'transfer_funds', 'delete_customer'")
     flow_id: Optional[str] = Field(None, description="Flow classification ID, e.g. 'payment_transfer'")
 
 
 class RuleCondition(BaseModel):
-    field: str = Field(..., description="Target field path in action arguments, e.g. 'amount', 'recipient.domain'")
-    operator: str = Field(..., description="Comparison operator: '==', '!=', '>', '>=', '<', '<=', 'in', 'not_in', 'contains'")
-    value: Any = Field(..., description="Target value for evaluation")
+    field: Optional[str] = Field(None, description="Target field path in action arguments, e.g. 'amount', 'recipient.domain'")
+    operator: Optional[str] = Field(None, description="Comparison operator: '==', '!=', '>', '>=', '<', '<=', 'in', 'not_in', 'contains'")
+    value: Optional[Any] = Field(None, description="Target value for evaluation")
 
 
 class ExtractedRule(BaseModel):
@@ -76,28 +85,35 @@ def _call_groq_api(prompt: str, system_prompt: str) -> Optional[str]:
         ],
     }
 
-    req = urllib.request.Request(
-        GROQ_API_URL,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "User-Agent": "ZymeRag-ActionGateway/1.0",
-        },
-        method="POST",
-    )
+    models_to_try = [GROQ_MODEL] + [m for m in FALLBACK_MODELS if m != GROQ_MODEL]
 
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            return data["choices"][0]["message"]["content"]
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="ignore")
-        print(f"[RuleExtraction] Groq API HTTP {e.code} error: {body}")
-        return None
-    except Exception as e:
-        print(f"[RuleExtraction] Groq API invocation failed: {e}")
-        return None
+    for model in models_to_try:
+        payload["model"] = model
+        req = urllib.request.Request(
+            GROQ_API_URL,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                return data["choices"][0]["message"]["content"]
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="ignore")
+            if e.code in (404, 400, 429):
+                print(f"[RuleExtraction] Groq model '{model}' hit HTTP {e.code}, trying fallback...")
+                continue
+            print(f"[RuleExtraction] Groq API HTTP {e.code} error: {body}")
+            return None
+        except Exception as e:
+            print(f"[RuleExtraction] Groq API error for model {model}: {e}")
+            continue
+    return None
 
 
 def parse_and_validate_rule(raw_json_str: str) -> Optional[ExtractedRule]:
@@ -176,6 +192,7 @@ async def extract_rules_from_document(doc_id: str, chunks_data: List[Dict[str, A
         chunk_text = chunk.get("text", "")
         chunk_id = chunk.get("chunk_id", "")
         rule_id = await extract_rule_from_chunk(chunk_text, chunk_id, doc_id)
+        await asyncio.sleep(1.0)
         if rule_id:
             created_rule_ids.append(rule_id)
 

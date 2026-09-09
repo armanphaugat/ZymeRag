@@ -1,6 +1,8 @@
 import asyncio
 from io import BytesIO
+import os
 import shutil
+import tempfile
 import uuid
 from pathlib import Path as SyncPath
 
@@ -34,17 +36,25 @@ def get_embedder():
     return _embedding_maker
 
 
-def _convert_pdf_sync(stream: BytesIO):
-    converter = get_converter()
-    result = converter.convert(stream)
-    documents = result.document
-    return documents.export_to_markdown()
+def _convert_pdf_sync(pdf_bytes: bytes, filename: str = "document.pdf"):
+    suffix = SyncPath(filename).suffix or ".pdf"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(pdf_bytes)
+        tmp_path = tmp.name
+
+    try:
+        converter = get_converter()
+        result = converter.convert(SyncPath(tmp_path))
+        return result.document.export_to_markdown()
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 
 async def read_text_from_pdf(file):
     pdf_bytes = await file.read()
-    stream = BytesIO(pdf_bytes)
-    markdown = await asyncio.to_thread(_convert_pdf_sync, stream)
+    filename = getattr(file, "filename", "document.pdf")
+    markdown = await asyncio.to_thread(_convert_pdf_sync, pdf_bytes, filename)
     return markdown
 
 

@@ -61,10 +61,22 @@ async def _execute_mock_service(action: ToolAction) -> Dict[str, Any]:
     args = action.arguments
 
     if tool == "payment":
-        if op == "transfer_funds":
-            return _http_request("POST", "/payment/transfer", args)
-        elif op == "refund_payment":
-            return _http_request("POST", "/payment/refund", args)
+        if op in ("transfer_funds", "transfer"):
+            payload = {
+                "account_id": args.get("account_id", action.resource),
+                "recipient": args.get("recipient", "recipient_account"),
+                "amount": float(args.get("amount", 0.0)),
+                "currency": args.get("currency", "USD"),
+                "note": args.get("note", args.get("reason", None)),
+            }
+            return _http_request("POST", "/payment/transfer", payload)
+        elif op in ("refund_payment", "refund", "issue_refund"):
+            payload = {
+                "transaction_id": args.get("transaction_id", args.get("order_id", action.resource)),
+                "amount": float(args.get("amount", 0.0)),
+                "reason": args.get("reason", None),
+            }
+            return _http_request("POST", "/payment/refund", payload)
         else:
             raise ValueError(f"Unknown payment operation '{op}'")
 

@@ -113,7 +113,7 @@ async def get_audit_trail(
                        u.name as policy_document_name
                 FROM audit_events a
                 LEFT JOIN rules r ON a.matched_rule_id = r.rule_id
-                LEFT JOIN uploads u ON r.source_document = u.content_id
+                LEFT JOIN contents u ON r.source_document = u.content_id
             """
             params = {"limit": limit}
             if action_id:

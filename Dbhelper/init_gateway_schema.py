@@ -4,11 +4,9 @@ import sys
 from pathlib import Path
 from sqlalchemy import text
 
-# Ensure root directory is in sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from Dbhelper.db import AsyncDB, engine
-
 
 DEFAULT_FLOWS = [
     ("crm", "get_customer", "crm_read", "Read customer details from CRM"),
@@ -19,30 +17,61 @@ DEFAULT_FLOWS = [
     ("email", "send_email", "email_notification", "Dispatch an email via mail gateway"),
 ]
 
+def split_sql(sql_content: str):
+    clean_lines = []
+    for line in sql_content.splitlines():
+        idx = line.find("--")
+        if idx != -1:
+            line = line[:idx]
+        clean_lines.append(line)
+    clean_sql = "\n".join(clean_lines)
+
+    statements = []
+    current_stmt = []
+    in_do_block = False
+
+    for line in clean_sql.splitlines():
+        if "DO 8649" in line or "DO $" in line:
+            in_do_block = True
+        current_stmt.append(line)
+        if "END 8649" in line or "END $" in line:
+            in_do_block = False
+
+        if ";" in line and not in_do_block:
+            full_stmt = "\n".join(current_stmt).strip()
+            if full_stmt:
+                statements.append(full_stmt)
+            current_stmt = []
+
+    if current_stmt:
+        rem = "\n".join(current_stmt).strip()
+        if rem:
+            statements.append(rem)
+
+    return [s for s in statements if s.strip("; \n")]
 
 async def init_schema():
-    """Reads schema.sql and applies all DDL statements to the connected Postgres database."""
     schema_path = Path(__file__).parent / "schema.sql"
     if not schema_path.exists():
         raise FileNotFoundError(f"Schema file not found at {schema_path}")
 
     sql_content = schema_path.read_text(encoding="utf-8")
-    
-    # Split queries by semicolon to execute individually
-    statements = [stmt.strip() for stmt in sql_content.split(";") if stmt.strip()]
+    statements = split_sql(sql_content)
 
     print(f"Applying {len(statements)} schema statements to Supabase/Postgres...")
-    async with AsyncDB() as session:
-        for stmt in statements:
-            try:
+    for stmt in statements:
+        try:
+            async with AsyncDB() as session:
                 await session.execute(text(stmt))
-            except Exception as e:
-                print(f"Warning executing statement: {e}\nStatement: {stmt[:60]}...")
-        await session.commit()
-        print("Schema tables successfully initialized.")
+                await session.commit()
+        except Exception as e:
+            stmt_prev = stmt[:60].replace("\n", " ")
+            print(f"Note executing statement: {e} | Summary: {stmt_prev}...")
 
-        # Seed default flow_registry rows
-        print("Seeding initial flow_registry entries...")
+    print("Schema tables successfully initialized.")
+
+    print("Seeding initial flow_registry entries...")
+    async with AsyncDB() as session:
         for tool, op, flow_id, desc in DEFAULT_FLOWS:
             await session.execute(
                 text("""
@@ -53,8 +82,7 @@ async def init_schema():
                 {"tool": tool, "op": op, "flow_id": flow_id, "desc": desc},
             )
         await session.commit()
-        print("Default flow registry seeded successfully.")
-
+    print("Default flow registry seeded successfully.")
 
 if __name__ == "__main__":
     try:

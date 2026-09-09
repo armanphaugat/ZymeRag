@@ -1,4 +1,6 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()
 from fastapi import FastAPI
 from Backend.Middleware.auth import auth_middleware
 from Backend.Router.upload_router import upload_router

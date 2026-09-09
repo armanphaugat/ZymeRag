@@ -78,7 +78,7 @@ async def execute_action_handler(
     - ALLOW: Safely dispatches action to target enterprise service.
     """
     # 1. Idempotency Check
-    if idempotent_key:
+    if isinstance(idempotent_key, str) and idempotent_key.strip():
         cached_res = await get_idempotent_result(idempotent_key)
         if cached_res:
             try:
@@ -109,7 +109,7 @@ async def execute_action_handler(
             executed=False,
             error=eval_res.reason,
         )
-        if idempotent_key:
+        if isinstance(idempotent_key, str) and idempotent_key.strip():
             await save_idempotent_result(idempotent_key, json.dumps(res.model_dump(), default=str))
         return res
 
@@ -146,7 +146,7 @@ async def execute_action_handler(
                 "required_role": eval_res.required_approval_role,
             },
         )
-        if idempotent_key:
+        if isinstance(idempotent_key, str) and idempotent_key.strip():
             await save_idempotent_result(idempotent_key, json.dumps(res.model_dump(), default=str))
         return res
 
@@ -164,7 +164,7 @@ async def execute_action_handler(
     )
 
     exec_res = await execute_action(action, flow_id)
-    if idempotent_key:
+    if isinstance(idempotent_key, str) and idempotent_key.strip():
         await save_idempotent_result(idempotent_key, json.dumps(exec_res.model_dump(), default=str))
     return exec_res
 
