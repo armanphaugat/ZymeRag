@@ -9,6 +9,7 @@ from Splitter.PdfSplitter import PdfTextSplitter
 import uuid
 from Embeddings.Embeddingmaker import Embedder
 from Dbhelper.pdf_db_helper import save_content_to_database
+from langchain_community.vectorstores import FAISS
 
 BASE_DIR = SyncPath("Data").resolve()
 content_dir = BASE_DIR / "Content"

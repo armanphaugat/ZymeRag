@@ -1,15 +1,22 @@
 import asyncio
 from io import BytesIO
 import shutil
-
+import torch._dynamo
+torch._dynamo.config.suppress_errors = True
+import pymupdf
 from pathlib import Path as SyncPath
 import anyio
 from Splitter.PdfSplitter import PdfTextSplitter
 import uuid
 from Embeddings.Embeddingmaker import Embedder
 from langchain_community.vectorstores import FAISS
+import torch._dynamo
+torch._dynamo.config.suppress_errors = True
+print("PyTorch:", torch.__version__)
+print("CUDA available:", torch.cuda.is_available())
+print("CUDA:", torch.version.cuda)
 try:
-    from docling.document_converter import DocumentConverter
+    from docling.document_converter import DocumentConverter, DocumentStream
     converter = DocumentConverter()
 except ImportError:
     converter = None
@@ -22,21 +29,32 @@ pdf_splitter = PdfTextSplitter()
 embedding_maker = Embedder()
 
 
-def _convert_pdf_sync(stream: BytesIO):
+def _convert_pdf_sync(stream: BytesIO, filename: str):
     if converter is not None:
-        result = converter.convert(stream)
-        documents = result.document
-        return documents.export_to_markdown()
-    import fitz  # PyMuPDF fallback
-    doc = fitz.open(stream=stream.getvalue(), filetype="pdf")
-    text = "\n".join(page.get_text() for page in doc)
+        source = DocumentStream(
+            name=filename,
+            stream=stream
+        )
+
+        result = converter.convert(source)
+
+        return result.document.export_to_markdown()
+    doc = pymupdf.open(
+        stream=stream.getvalue(),
+        filetype="pdf"
+    )
+    text = "\n".join(
+        page.get_text()
+        for page in doc
+    )
+
     return text
 
-
 async def read_text_from_pdf(file):
+    print(f"Reading PDF file: {file.filename}")
     pdf_bytes = await file.read()
     stream = BytesIO(pdf_bytes)
-    markdown = await asyncio.to_thread(_convert_pdf_sync, stream)
+    markdown = await asyncio.to_thread(_convert_pdf_sync, stream,file.filename)
     return markdown
 
 
@@ -47,13 +65,17 @@ def _build_and_save_index_sync(chunks, content_path: SyncPath):
 
 async def ingest_pdf(file, name: str):
     try:
+        print(f"Reading PDF: {file.filename}")
         markdown = await read_text_from_pdf(file)
         chunks = await asyncio.to_thread(pdf_splitter.split, markdown)
         id = str(uuid.uuid4())
         content_path = content_dir / f"{id}"
+        print(f"Creating content directory for PDF: {file.filename}")
         await asyncio.to_thread(content_path.mkdir, parents=True, exist_ok=True)
         await asyncio.to_thread(_build_and_save_index_sync, chunks, content_path)
+        print(f"PDF ingested and index built for: {file.filename}")
         database_saved = await save_content_to_database(name=name, content_id=id, doc_type="pdf", chunks=len(chunks))
+        print(f"Database save status for PDF: {file.filename} - {database_saved}")
         if database_saved:
             print(f"Pdf ingested and saved to database with ID: {id}")
             return id

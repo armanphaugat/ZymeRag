@@ -61,6 +61,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const toastIcon = document.getElementById('toastIcon');
     const toastMessage = document.getElementById('toastMessage');
 
+    const queryForm = document.getElementById('queryForm');
+    const queryQuestionInput = document.getElementById('queryQuestionInput');
+    const queryIdsInput = document.getElementById('queryIdsInput');
+    const submitQueryBtn = document.getElementById('submitQueryBtn');
+    const queryBtnSpinner = document.getElementById('queryBtnSpinner');
+    const queryBtnText = document.getElementById('queryBtnText');
+    const queryStatusBadge = document.getElementById('queryStatusBadge');
+    const queryResponseTime = document.getElementById('queryResponseTime');
+    const queryJsonViewer = document.getElementById('queryJsonViewer');
+    const copyQueryJsonBtn = document.getElementById('copyQueryJsonBtn');
+
+    let rawLastQueryResponse = null;
+
     // App State
     let selectedFile = null;
     let selectedEndpoint = '/upload/upload_pdf';
@@ -508,5 +521,80 @@ document.addEventListener('DOMContentLoaded', () => {
         return str.replace(/[&<>"']/g, function(m) {
             return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
         });
+    }
+});
+queryForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const baseUrl = serverUrlInput.value.replace(/\/$/, '');
+    const question = queryQuestionInput.value.trim();
+    const ids = queryIdsInput.value.split(',').map(s => s.trim()).filter(Boolean);
+
+    if (!question || ids.length === 0) {
+        showToast('Question and at least one Content ID are required', 'error');
+        return;
+    }
+
+    submitQueryBtn.disabled = true;
+    queryBtnSpinner.classList.remove('hidden');
+    queryBtnText.textContent = 'Querying...';
+    queryStatusBadge.className = 'status-badge status-idle';
+    queryStatusBadge.textContent = 'Processing...';
+
+    const params = new URLSearchParams();
+    params.append('question', question);
+    ids.forEach(id => params.append('ids', id)); // repeated ids=... for FastAPI list parsing
+
+    const startTime = performance.now();
+    let status = 0;
+    let data = null;
+
+    try {
+        const res = await fetch(`${baseUrl}/query/query?${params.toString()}`, {
+            method: 'GET'
+        });
+
+        status = res.status;
+        const duration = Math.round(performance.now() - startTime);
+        queryResponseTime.textContent = `${duration} ms`;
+
+        data = await res.json();
+        rawLastQueryResponse = data;
+        queryJsonViewer.innerHTML = syntaxHighlightJSON(data);
+
+        totalRequests++;
+        totalLatencyMs += duration;
+
+        if (res.ok) {
+            totalSuccessCount++;
+            queryStatusBadge.className = 'status-badge status-success';
+            queryStatusBadge.textContent = '200 OK';
+            showToast('Query executed successfully!', 'success');
+        } else {
+            queryStatusBadge.className = 'status-badge status-error';
+            queryStatusBadge.textContent = `HTTP ${status}`;
+            showToast((data && data.detail) || 'Query failed', 'error');
+        }
+
+        updateMetrics();
+        addLogEntry('GET', '/query/query', status, duration, data);
+
+    } catch (err) {
+        const duration = Math.round(performance.now() - startTime);
+        queryStatusBadge.className = 'status-badge status-error';
+        queryStatusBadge.textContent = 'Network Error';
+        queryJsonViewer.innerHTML = syntaxHighlightJSON({ error: err.message });
+        showToast(`Request failed: ${err.message}`, 'error');
+        addLogEntry('GET', '/query/query', 'FAIL', duration, { error: err.message });
+    } finally {
+        submitQueryBtn.disabled = false;
+        queryBtnSpinner.classList.add('hidden');
+        queryBtnText.textContent = '🔍 Run Query';
+    }
+});
+
+copyQueryJsonBtn.addEventListener('click', () => {
+    if (rawLastQueryResponse) {
+        navigator.clipboard.writeText(JSON.stringify(rawLastQueryResponse, null, 2));
+        showToast('Query response JSON copied!', 'info');
     }
 });

@@ -34,6 +34,22 @@ class SemanticQuery:
         if(len(result)>6):
             result.sort(key=lambda x: x[1])
         return result[:top_k]
+    async def get_semantic_chunks_fromContent(self,query:str,uuids:list[str],top_k:int=5):
+        result=[]
+        paths=[]
+        for uuid in uuids:
+            content_path=f"{BASE_DIR}/Content/{uuid}"
+            pathexsistence=Path(content_path)
+            if pathexsistence.exists()!=True :
+                raise FileNotFoundError(f"This Directory Do not Exists {content_path}")
+            paths.append(content_path)
+        tasks=[asyncio.to_thread(self.load_and_search,path,query) for path in paths]
+        all_result=await asyncio.gather(*tasks)
+        for chunks in all_result:
+            result.extend(chunks)
+        if(len(result)>6):
+            result.sort(key=lambda x: x[1])
+        return result[:top_k]
     
 
         

@@ -42,3 +42,21 @@ class BM25:
             result.sort(key=lambda x:x[1],reverse=True)
             return result[:self.top_k]
         return result
+    
+    async def get_keyword_chunks_From_Content(self, query: str, uuids: list[str]):
+        result = []
+        paths = []
+        for uuid in uuids:
+            content_path = f"{BASE_DIR}/Content/{uuid}"
+            pathexsistence = Path(content_path)
+            if pathexsistence.exists() != True:
+                raise FileNotFoundError(f"This Directory Do not Exists {content_path}")
+            paths.append(content_path)
+        tasks = [asyncio.to_thread(self.loadandquery, query, path) for path in paths]
+        all_result = await asyncio.gather(*tasks)
+        for chunks in all_result:
+            result.extend(chunks)
+        if(len(result) > 6):
+            result.sort(key=lambda x: x[1], reverse=True)
+            return result[:self.top_k]
+        return result
