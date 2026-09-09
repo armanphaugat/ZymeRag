@@ -10,9 +10,11 @@ web_fallback = WebSearchFallback()
 
 async def get_all_chunks(query: str, ids: list[str]):
     bm25chunks, semanticchunks = await asyncio.gather(
-        bm25.get_keyword_chunks_From_Feed(query, ids),
-        semantic.get_semantic_chunks_fromFeed(query, ids)
+        bm25.get_keyword_chunks_From_Content(query, ids),
+        semantic.get_semantic_chunks_fromContent(query, ids)
     )
+    print("BM25:", len(bm25chunks))
+    print("SEMANTIC:", len(semanticchunks))
     return bm25chunks + semanticchunks
 
 

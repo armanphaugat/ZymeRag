@@ -14,7 +14,7 @@ class SemanticQuery:
 
     def load_and_search(self,path,query):
         vectorstore = FAISS.load_local(
-            path, embedder.model, allow_dangerous_deserialization=True
+            path, embedder, allow_dangerous_deserialization=True
         )
         return vectorstore.similarity_search_with_score(query, k=6)
     
