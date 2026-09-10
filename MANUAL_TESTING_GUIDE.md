@@ -104,10 +104,10 @@ curl -X GET "http://localhost:8000/rules"
 Upload a policy PDF document (e.g. `Refund_Policy.pdf`).
 
 ```bash
-curl -X POST "http://localhost:8000/upload/pdf" \
+curl -X POST "http://localhost:8000/upload/upload_pdf" \
   -H "Authorization: Bearer gateway_internal_secret" \
-  -F "file=@/path/to/your/policy.pdf" \
-  -F "name=ECommerce_Refund_Policy"
+  -F "file=@/Users/kushagragupta/Deloitte Capstone/Policy.pdf" \
+  -F "name=Enterprise_Policy"
 ```
 **Expected Response (HTTP 200):**
 ```json
