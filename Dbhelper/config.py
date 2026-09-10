@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 BASE_DIR = Path("Data").resolve()
 BASE_DIR.mkdir(parents=True, exist_ok=True)
 
-load_dotenv()
+load_dotenv(override=True)
 
 DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("SUPABASE_DB_URL") or ""
 

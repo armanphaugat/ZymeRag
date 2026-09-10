@@ -212,6 +212,16 @@ async def decide_approval_handler(
         )
         return {"message": "Action successfully rejected by reviewer", "status": "REJECTED"}
 
+    # Resolve human username if JWT token was passed
+    if not payload.decided_by and request and hasattr(request.state, "user") and request.state.user:
+        try:
+            from Dbhelper.user_db_helper import get_user_by_id
+            u = await get_user_by_id(request.state.user)
+            if u and u.get("username"):
+                decided_by = u["username"]
+        except Exception:
+            pass
+
     # Handle Human Approval -> MUST RE-VALIDATE!
     if payload.decision.upper() == "APPROVED":
         raw_payload = approval.get("action_payload")
@@ -234,6 +244,7 @@ async def decide_approval_handler(
                 user_id=decided_by,
                 details={
                     "approval_id": approval_id,
+                    "decided_by": decided_by,
                     "revalidation_error": "Policy changed to BLOCK during review period",
                     "reason": reval.reason,
                 },
@@ -243,8 +254,24 @@ async def decide_approval_handler(
                 detail=f"Pre-execution revalidation failed: Active policy now blocks this action ({reval.reason})."
             )
 
-        # Revalidation passed -> Update approval and execute
+        # Revalidation passed -> Update approval, log human decision in audit chain, and execute
         await update_approval_status(approval_id, "APPROVED", decided_by)
+        await log_audit_event(
+            action_id=str(action.action_id),
+            tool=action.tool,
+            operation=action.operation,
+            flow_id=flow_id,
+            decision="APPROVED",
+            agent_id=action.agent_id,
+            user_id=decided_by,
+            matched_rule_id=getattr(reval, "matched_rule_id", None),
+            details={
+                "approval_id": approval_id,
+                "decided_by": decided_by,
+                "action": "human_escalation_approval",
+                "reason": payload.reason or "Approved by human compliance officer",
+            },
+        )
         exec_res = await execute_action(action, flow_id)
         return {
             "message": "Action re-validated, approved, and executed successfully",

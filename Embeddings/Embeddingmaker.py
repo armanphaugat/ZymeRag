@@ -1,5 +1,8 @@
 from sentence_transformers import SentenceTransformer
-class Embedder:
+from langchain_core.embeddings import Embeddings
+
+
+class Embedder(Embeddings):
 
     def __init__(self, model_name="Qwen/Qwen3-Embedding-0.6B"):
         self.model = SentenceTransformer(model_name)
@@ -9,10 +12,10 @@ class Embedder:
             chunks,
             normalize_embeddings=True,
             show_progress_bar=True
-        ).astype("float32")
+        ).astype("float32").tolist()
 
     def embed_query(self, query):
         return self.model.encode(
             query,
             normalize_embeddings=True
-        ).astype("float32")
+        ).astype("float32").tolist()

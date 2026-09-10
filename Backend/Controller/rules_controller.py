@@ -1,3 +1,5 @@
+import uuid
+from Backend.Gateway.audit import log_audit_event
 from typing import Optional, Dict, Any
 from fastapi import HTTPException, Query, Request
 from pydantic import BaseModel
@@ -56,6 +58,24 @@ async def approve_rule_handler(rule_id: str, payload: Optional[ApproveRuleReques
         raise HTTPException(status_code=500, detail="Failed to approve rule")
 
     updated_rule = await get_rule_by_id(rule_id)
+    try:
+        await log_audit_event(
+            action_id=str(uuid.uuid4()),
+            tool="policy_engine",
+            operation="approve_rule",
+            decision="RULE_APPROVED",
+            user_id=approver,
+            matched_rule_id=rule_id,
+            details={
+                "rule_id": rule_id,
+                "rule_name": rule.get("name"),
+                "approved_by": approver,
+                "version": updated_rule.get("version") if updated_rule else 1,
+            },
+        )
+    except Exception as e:
+        print(f"[RulesController] Audit log failed: {e}")
+
     return {"message": "Rule approved successfully", "rule": updated_rule}
 
 

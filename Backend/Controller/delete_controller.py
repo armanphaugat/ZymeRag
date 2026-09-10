@@ -31,7 +31,7 @@ async def delete_id(id:str=Form()):
         if website == 1:
             await delete_website_from_database(feed_id=id)
         elif website == 0:
-            await delete_content_from_database(feed_id=id)
+            await delete_content_from_database(content_id=id)
         return {"status": "success", "message": "Content and database records successfully removed."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

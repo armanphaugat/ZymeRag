@@ -1,8 +1,11 @@
 import os
 from typing import Optional
+from dotenv import load_dotenv
 import jwt
 from fastapi import Request
 from fastapi.responses import JSONResponse
+
+load_dotenv()
 
 ACCESS_TOKEN_SECRET = os.getenv("ACCESS_TOKEN_SECRET", "dev_secret_key_change_in_production")
 GATEWAY_API_KEY = os.getenv("GATEWAY_API_KEY", "gateway_internal_secret")
@@ -13,6 +16,7 @@ PUBLIC_PATHS = {
     "/docs",
     "/redoc",
     "/openapi.json",
+    "/ui",
 }
 
 PUBLIC_PREFIXES = (
@@ -20,6 +24,8 @@ PUBLIC_PREFIXES = (
     "/redoc",
     "/openapi.json",
     "/mock",
+    "/static",
+    "/user",
 )
 
 
@@ -32,9 +38,15 @@ async def verify_token(token: str) -> Optional[str]:
         return "service_agent"
     try:
         payload = jwt.decode(token, ACCESS_TOKEN_SECRET, algorithms=["HS256"])
-        return payload.get("username") or payload.get("sub")
-    except Exception as e:
-        print(f"Token verification failed: {e}")
+        if payload.get("type") != "access":
+            print("[Auth Warning] Token with wrong type presented as access token")
+            return None
+        return payload.get("user_id") or payload.get("username") or payload.get("sub")
+    except jwt.ExpiredSignatureError:
+        print("[Auth Info] Access token expired")
+        return None
+    except jwt.InvalidTokenError as e:
+        print(f"[Auth Info] Invalid access token: {e}")
         return None
 
 
@@ -54,19 +66,13 @@ async def auth_middleware(request: Request, call_next):
     if not token:
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
-            return JSONResponse(
-                status_code=401,
-                content={"detail": "Unauthorized: Missing Bearer Token"}
-            )
+            return JSONResponse(status_code=401, content={"detail": "Unauthorized: Missing Bearer Token"})
         token = auth_header.split(" ", 1)[1].strip()
 
-    username = await verify_token(token)
-    if not username:
-        return JSONResponse(
-            status_code=403,
-            content={"detail": "Forbidden: Invalid or expired token"}
-        )
+    user_id = await verify_token(token)
+    if not user_id:
+        return JSONResponse(status_code=403, content={"detail": "Forbidden: Invalid or expired token"})
 
-    # Attach verified user identity to request state for downstream handlers
-    request.state.user = username
+    request.state.user = user_id
+    request.state.user_id = user_id
     return await call_next(request)

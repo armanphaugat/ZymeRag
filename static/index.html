@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Axiom Gateway — Deloitte Policy Enforcement Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div class="shell">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <span class="brand-mark">D.</span>
+      <div class="brand-text">
+        <div class="brand-title">Axiom Gateway</div>
+        <div class="brand-sub">Policy Enforcement</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">MAIN</div>
+      <a class="nav-item active" data-view="ingestion" onclick="showView('ingestion')">
+        <svg viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+        Policy Ingestion
+      </a>
+      <a class="nav-item" data-view="rules" onclick="showView('rules')">
+        <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        Rule Review
+        <span class="nav-badge" id="badge-rules">0</span>
+      </a>
+      <div class="nav-section-label">ENFORCEMENT</div>
+      <a class="nav-item" data-view="approvals" onclick="showView('approvals')">
+        <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Approval Queue
+        <span class="nav-badge urgent" id="badge-approvals">0</span>
+      </a>
+      <a class="nav-item" data-view="audit" onclick="showView('audit')">
+        <svg viewBox="0 0 24 24"><path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Audit Log
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="server-status">
+        <span class="status-dot" id="globalStatusDot"></span>
+        <span id="globalStatusText">Connecting...</span>
+      </div>
+      <div class="base-url-row">
+        <input id="baseUrl" value="http://localhost:8000" placeholder="http://localhost:8000">
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <div class="main">
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="topbar-title" id="topbarTitle">Policy Ingestion</div>
+      <div class="topbar-right">
+        <span class="org-name">Deloitte — Axiom Platform</span>
+        <button class="btn btn-outline-sm" onclick="refreshAll()">↻ Refresh</button>
+      </div>
+    </header>
+
+    <!-- ============================================================
+         VIEW 1: POLICY INGESTION
+    ============================================================ -->
+    <section class="view active" id="view-ingestion">
+      <div class="page-header">
+        <h1>Policy Ingestion</h1>
+        <p class="page-desc">Upload policy documents for automated chunking, embedding, and offline LLM rule extraction.</p>
+      </div>
+
+      <div class="stats-row" id="ingestion-stats">
+        <div class="stat-card">
+          <div class="stat-label">Documents Ingested</div>
+          <div class="stat-value" id="stat-docs">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Draft Rules</div>
+          <div class="stat-value" id="stat-drafts">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Approved Rules</div>
+          <div class="stat-value green" id="stat-approved">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Rejected Rules</div>
+          <div class="stat-value red" id="stat-rejected">—</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">Upload Policy Document</div>
+        <div class="card-body">
+          <div class="upload-zone" id="uploadZone">
+            <svg class="upload-icon" viewBox="0 0 24 24"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+            <div class="upload-text">Drop PDF here or <label for="fileInput" class="upload-link">browse file</label></div>
+            <div class="upload-hint">Supports PDF, DOCX, TXT, CSV, Images, Audio/Video</div>
+            <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.csv,.jpg,.jpeg,.png,.mp3,.mp4,.wav" style="display:none" onchange="handleFileSelect(this)">
+          </div>
+          <div id="selectedFile" class="selected-file hidden"></div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Document Name</label>
+              <input type="text" id="docName" placeholder="e.g. Northfield-Refund-Policy-v2">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="uploadDocument()" id="uploadBtn" disabled>
+            Upload &amp; Ingest Document
+          </button>
+          <div id="uploadStatus" class="status-msg hidden"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          Ingested Documents
+          <button class="btn-link" onclick="loadDocuments()">Refresh</button>
+        </div>
+        <div class="card-body p0">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Document Name</th>
+                <th>Type</th>
+                <th>Chunks</th>
+                <th>Ingested At</th>
+                <th>Content ID</th>
+              </tr>
+            </thead>
+            <tbody id="docs-table-body">
+              <tr><td colspan="5" class="empty-row">Loading documents...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         VIEW 2: RULE REVIEW (Phase 1 Human Approval)
+    ============================================================ -->
+    <section class="view" id="view-rules">
+      <div class="page-header">
+        <h1>Rule Review</h1>
+        <p class="page-desc">Review LLM-extracted DRAFT rules from ingested policy documents. Approve or reject each rule before it enters the enforcement engine.</p>
+      </div>
+
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label>Status Filter</label>
+          <select id="ruleStatusFilter" onchange="loadRules()">
+            <option value="">All</option>
+            <option value="DRAFT" selected>DRAFT</option>
+            <option value="APPROVED">APPROVED</option>
+            <option value="REJECTED">REJECTED</option>
+          </select>
+        </div>
+        <button class="btn btn-outline-sm" onclick="loadRules()">↻ Refresh</button>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="card-body p0">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Tool</th>
+                <th>Operation</th>
+                <th>Condition</th>
+                <th>Effect</th>
+                <th>Approval Role</th>
+                <th>Source Clause</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="rules-table-body">
+              <tr><td colspan="8" class="empty-row">Loading rules...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div id="rules-status" class="status-msg hidden"></div>
+    </section>
+
+    <!-- ============================================================
+         VIEW 3: APPROVAL QUEUE (Phase 2 Escalation Queue)
+    ============================================================ -->
+    <section class="view" id="view-approvals">
+      <div class="page-header">
+        <h1>Approval Queue</h1>
+        <p class="page-desc">Escalated agent actions awaiting human review. Approving re-validates against current live policies before execution.</p>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Pending</div>
+          <div class="stat-value orange" id="appr-pending">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Approved Today</div>
+          <div class="stat-value green" id="appr-approved">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Rejected Today</div>
+          <div class="stat-value red" id="appr-rejected">—</div>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label>Role Filter</label>
+          <select id="approvalRoleFilter" onchange="loadApprovals()">
+            <option value="">All Roles</option>
+            <option value="finance_manager">Finance Manager</option>
+            <option value="compliance_officer">Compliance Officer</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <button class="btn btn-outline-sm" onclick="loadApprovals()">↻ Refresh</button>
+      </div>
+
+      <div class="section-label">Pending Actions</div>
+      <div id="approvals-list">
+        <div class="empty-card">Loading approvals...</div>
+      </div>
+      <div id="approvals-status" class="status-msg hidden"></div>
+    </section>
+
+    <!-- ============================================================
+         VIEW 4: AUDIT LOG
+    ============================================================ -->
+    <section class="view" id="view-audit">
+      <div class="page-header">
+        <h1>Audit Log</h1>
+        <p class="page-desc">Immutable, SHA-256 hash-chained record of every enforcement decision. Tamper-evident by design.</p>
+      </div>
+
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label>Decision Type</label>
+          <select id="auditDecisionFilter" onchange="loadAudit()">
+            <option value="">All</option>
+            <option value="ALLOW">ALLOW</option>
+            <option value="BLOCK">BLOCK</option>
+            <option value="ESCALATE">ESCALATE</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Limit</label>
+          <select id="auditLimit" onchange="loadAudit()">
+            <option value="25">25</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+        <button class="btn btn-outline-sm" onclick="verifyAuditChain()">⛓ Verify Chain</button>
+        <button class="btn btn-outline-sm" onclick="loadAudit()">↻ Refresh</button>
+      </div>
+      <div id="chain-status" class="status-msg hidden" style="margin-bottom:10px"></div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="card-body p0">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Action ID</th>
+                <th>Agent</th>
+                <th>Tool</th>
+                <th>Operation</th>
+                <th>Decision</th>
+                <th>Matched Rule</th>
+                <th>Hash</th>
+              </tr>
+            </thead>
+            <tbody id="audit-table-body">
+              <tr><td colspan="8" class="empty-row">Loading audit log...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<!-- RULE DETAIL MODAL -->
+<div class="modal-overlay" id="ruleModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span id="modalTitle">Rule Detail</span>
+      <button class="modal-close" onclick="closeModal('ruleModal')">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer" id="modalFooter"></div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -24,6 +24,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "
 
 async def upload_pdf(file: UploadFile = File(...), name: str = Form(...), idempotent_key: Optional[str] = Form(None)):
     try:
+        print("Received request to upload PDF") 
         async with lock:
             if idempotent_key:
                 if idempotent_key in idempotent_keys:
@@ -31,6 +32,7 @@ async def upload_pdf(file: UploadFile = File(...), name: str = Form(...), idempo
         if file.content_type not in ["application/pdf"]:
             raise HTTPException(status_code=400, detail="Invalid file type. Only PDF files are allowed.")
         idempotent_keys[idempotent_key]=1
+        print("Ingesting PDF file...")
         upload_id_pdf=await ingest_pdf(file, name)
         if upload_id_pdf is None:
             idempotent_keys.pop(idempotent_key, None)
