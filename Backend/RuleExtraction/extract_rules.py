@@ -4,10 +4,9 @@ load_dotenv()
 import json
 import os
 import re
-import urllib.request
-import urllib.error
 from typing import Optional, List, Dict, Any, Literal
 from pydantic import BaseModel, Field, ValidationError
+from groq import AsyncGroq, RateLimitError, APIStatusError
 
 from Dbhelper.rules_db_helper import save_rule
 
@@ -19,7 +18,9 @@ FALLBACK_MODELS = [
     "groq/compound-mini",
     "qwen/qwen3.8-27b"
 ]
-GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+
+MAX_CONCURRENT_EXTRACTIONS = int(os.getenv("RULE_EXTRACTION_CONCURRENCY", "5"))
 
 
 class RuleScope(BaseModel):
@@ -35,7 +36,6 @@ class RuleCondition(BaseModel):
 
 
 class ExtractedRule(BaseModel):
-    """A single enforceable rule extracted from a policy clause."""
     scope: RuleScope
     condition: RuleCondition
     effect: Literal["ALLOW", "BLOCK", "ESCALATE"]
@@ -44,18 +44,10 @@ class ExtractedRule(BaseModel):
 
 
 class ExtractionResult(BaseModel):
-    """
-    Wrapper returned by the LLM per clause chunk.
-    A single clause (e.g. Section 3.1 with three refund tiers) may produce
-    multiple enforceable rules — they are all captured here, not silently dropped.
-    """
     has_enforceable_rules: bool
     rules: List[ExtractedRule] = Field(default_factory=list)
 
 
-# ---------------------------------------------------------------------------
-# Chunk pre-filter — skip chunks that cannot contain a policy rule
-# ---------------------------------------------------------------------------
 _SKIP_PATTERNS = [
     r"^#{1,4}\s*$",
     r"^(page\s*\d+|pg\.?\s*\d+)$",
@@ -67,9 +59,7 @@ _SKIP_PATTERNS = [
 
 
 def _should_skip_chunk(text: str) -> bool:
-    """Return True for chunks structurally unable to contain a policy rule."""
     stripped = text.strip()
-    # Fewer than 40 words is almost certainly a heading, caption, or fragment
     if len(stripped.split()) < 40:
         return True
     t_lower = stripped.lower()
@@ -110,62 +100,60 @@ Output STRICT JSON — no markdown fences, no commentary:
 If no enforceable rule exists: {"has_enforceable_rules": false, "rules": []}"""
 
 
-def _call_groq_api(prompt: str, system_prompt: str) -> Optional[str]:
-    """Invokes the Groq chat completions API with temperature 0."""
+_groq_client: Optional[AsyncGroq] = None
+
+
+def _get_client() -> Optional[AsyncGroq]:
+    global _groq_client
     api_key = os.getenv("GROQ_API_KEY", "")
     if not api_key:
+        return None
+    if _groq_client is None:
+        _groq_client = AsyncGroq(api_key=api_key)
+    return _groq_client
+
+
+async def _call_groq_api(prompt: str, system_prompt: str) -> Optional[str]:
+    client = _get_client()
+    if client is None:
         print("[RuleExtraction] GROQ_API_KEY not configured. Skipping LLM call.")
         return None
-
-    payload = {
-        "model": GROQ_MODEL,
-        "temperature": 0,
-        "response_format": {"type": "json_object"},
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt},
-        ],
-    }
 
     models_to_try = [GROQ_MODEL] + [m for m in FALLBACK_MODELS if m != GROQ_MODEL]
 
     for model in models_to_try:
-        payload["model"] = model
-        req = urllib.request.Request(
-            GROQ_API_URL,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-            },
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                return data["choices"][0]["message"]["content"]
-        except urllib.error.HTTPError as e:
-            body = e.read().decode("utf-8", errors="ignore")
-            if e.code in (404, 400, 429):
-                print(f"[RuleExtraction] Groq model '{model}' hit HTTP {e.code}, trying fallback...")
+        for rate_limit_attempt in range(2):
+            try:
+                response = await client.chat.completions.create(
+                    model=model,
+                    temperature=0,
+                    response_format={"type": "json_object"},
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt},
+                    ],
+                    timeout=30,
+                )
+                return response.choices[0].message.content
+            except RateLimitError:
+                print(f"[RuleExtraction] Groq model '{model}' rate-limited, backing off...")
+                await asyncio.sleep(2.0 ** rate_limit_attempt * 3)
                 continue
-            print(f"[RuleExtraction] Groq API HTTP {e.code} error: {body}")
-            return None
-        except Exception as e:
-            print(f"[RuleExtraction] Groq API error for model {model}: {e}")
-            continue
+            except APIStatusError as e:
+                if e.status_code in (404, 400):
+                    print(f"[RuleExtraction] Groq model '{model}' hit HTTP {e.status_code}, trying fallback...")
+                    break
+                print(f"[RuleExtraction] Groq API HTTP {e.status_code} error: {e}")
+                return None
+            except Exception as e:
+                print(f"[RuleExtraction] Groq API error for model {model}: {e}")
+                break
     return None
 
 
 def parse_and_validate_rules(raw_json_str: str) -> List[ExtractedRule]:
-    """
-    Parses and validates raw LLM output against the ExtractionResult schema.
-    Returns a list of valid ExtractedRule objects (empty list on any parse error).
-    """
     try:
         clean_str = raw_json_str.strip()
-        # Strip markdown fence if present
         if clean_str.startswith("```"):
             clean_str = re.sub(r"^```(?:json)?\n?", "", clean_str)
             clean_str = re.sub(r"\n?```$", "", clean_str)
@@ -183,18 +171,6 @@ async def extract_rules_from_chunk(
     doc_id: str,
     max_retries: int = 1
 ) -> List[str]:
-    """
-    Offline extractor: analyzes a single clause chunk, calls Groq LLM,
-    validates output against ExtractionResult schema (wraps a LIST of rules),
-    and inserts ALL valid rules into the rules table with status='DRAFT'.
-
-    A multi-tier clause (e.g. Section 3.1 with three refund tiers) produces
-    multiple DRAFT rule rows — one per tier — instead of silently dropping all
-    but the first.
-
-    Returns a list of saved rule_ids (may be empty if nothing was extracted).
-    """
-    # --- Pre-filter: skip chunks structurally unable to contain a policy rule ---
     if _should_skip_chunk(chunk_text):
         print(f"[RuleExtraction] Skipping chunk {chunk_id} (short or non-policy content).")
         return []
@@ -206,19 +182,15 @@ async def extract_rules_from_chunk(
     )
 
     for attempt in range(max_retries + 1):
-        raw_output = _call_groq_api(user_prompt, EXTRACTION_SYSTEM_PROMPT)
+        raw_output = await _call_groq_api(user_prompt, EXTRACTION_SYSTEM_PROMPT)
         if not raw_output:
-            # Exponential backoff before retry on network/API failure
             await asyncio.sleep(2.0 ** attempt * 3)
             continue
-
         extracted = parse_and_validate_rules(raw_output)
         if not extracted:
             print(f"[RuleExtraction] Retry {attempt + 1} for chunk {chunk_id}: no valid rules parsed.")
             await asyncio.sleep(2.0 ** attempt * 2)
             continue
-
-        # Save every rule extracted from this clause
         saved_ids = []
         for rule in extracted:
             rule_id = await save_rule(
@@ -245,34 +217,27 @@ async def extract_rules_from_chunk(
 
 
 async def extract_rules_from_document(doc_id: str, chunks_data: List[Dict[str, Any]]):
-    """
-    Triggers offline rule extraction over all chunks of an uploaded policy document.
-    Runs asynchronously as a background task after PDF ingestion.
-
-    Rate-limit strategy:
-      - Chunks shorter than 40 words or matching non-policy patterns are skipped
-        before any API call is made (saves ~60% of Groq calls on typical policy docs).
-      - A fixed 5-second pause between chunks keeps throughput well within
-        Groq free-tier limits (~30 req/min, ~6k tokens/min).
-      - On LLM failure, extract_rules_from_chunk applies exponential backoff
-        per retry before giving up on that chunk.
-    """
     print(
         f"[RuleExtraction] Starting offline rule extraction for doc {doc_id} "
-        f"({len(chunks_data)} chunks)..."
+        f"({len(chunks_data)} chunks, max {MAX_CONCURRENT_EXTRACTIONS} concurrent)..."
     )
-    created_rule_ids: List[str] = []
-
-    for chunk in chunks_data:
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_EXTRACTIONS)
+    async def _bounded_extract(chunk: Dict[str, Any]) -> List[str]:
         chunk_text = chunk.get("text", "")
         chunk_id = chunk.get("chunk_id", "")
+        async with semaphore:
+            return await extract_rules_from_chunk(chunk_text, chunk_id, doc_id)
+    results = await asyncio.gather(
+        *[_bounded_extract(chunk) for chunk in chunks_data],
+        return_exceptions=True,
+    )
 
-        # Returns a list — one entry per rule/tier found in this clause
-        rule_ids = await extract_rules_from_chunk(chunk_text, chunk_id, doc_id)
-        created_rule_ids.extend(rule_ids)
-
-        # 5-second inter-chunk pause to stay within Groq free-tier rate limits
-        await asyncio.sleep(5.0)
+    created_rule_ids: List[str] = []
+    for chunk, result in zip(chunks_data, results):
+        if isinstance(result, Exception):
+            print(f"[RuleExtraction] Chunk {chunk.get('chunk_id', '?')} raised {result!r}, skipping.")
+            continue
+        created_rule_ids.extend(result)
 
     print(
         f"[RuleExtraction] Completed extraction for doc {doc_id}. "
