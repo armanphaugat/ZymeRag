@@ -2,6 +2,7 @@ import asyncio
 from io import BytesIO
 import shutil
 import re
+import fitz
 import torch._dynamo
 torch._dynamo.config.suppress_errors = True
 import pymupdf
@@ -50,14 +51,25 @@ def _convert_pdf_sync(stream: BytesIO, filename: str):
         page.get_text()
         for page in doc
     )
-
     return text
+
+def _convert_pdf_sync_fitz(file_bytes:bytes):
+    doc=fitz.open(stream=file_bytes, filetype="pdf")
+    pages_text=[]
+    for page in doc:
+        text = page.get_text("text")
+        pages_text.append(text)
+    doc.close()
+    return "\n".join(pages_text)
 
 async def read_text_from_pdf(file):
     print(f"Reading PDF file: {file.filename}")
     pdf_bytes = await file.read()
     stream = BytesIO(pdf_bytes)
     markdown = await asyncio.to_thread(_convert_pdf_sync, stream,file.filename)
+    if markdown is None:
+        print(f"Converter failed for {file.filename}, falling back to PyMuPDF")
+        markdown = await asyncio.to_thread(_convert_pdf_sync_fitz, pdf_bytes)
     return markdown
 
 def tokenize(text: str):
