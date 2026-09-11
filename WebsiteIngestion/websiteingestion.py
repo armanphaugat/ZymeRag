@@ -74,9 +74,22 @@ async def website_crawl(url:str):
     except Exception as e:
         print(f"Error occurred while crawling the website: {e}")
         return None
+    
+async def website_crawl2(url:str):
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.goto(url,wait_until="domcontentloaded")
+        await page.wait_for_load_state("load")
+        html=await page.content()
+        text=await page.locator("body").inner_text()
+        await browser.close()
+        return text
 
 async def ingest_website(url:str):
     markdown=await website_crawl(url)
+    if markdown is None:
+        markdown=await website_crawl2(url)
     if markdown:
         chunks=website_splitter.split(markdown)
         id=str(uuid.uuid4())
@@ -95,19 +108,11 @@ async def ingest_website(url:str):
         print("No markdown content to process.")
         return None
 
-async def ingest_website2(url:str):
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
-        await page.goto(url,wait_until="domcontentloaded")
-        await page.wait_for_load_state("load")
-        html=await page.content()
-        text=await page.locator("body").inner_text()
-        await browser.close()
-        return text
 
 async def update_website(url:str,id:str):
     markdown=await website_crawl(url)
+    if markdown is None:
+        markdown=await website_crawl2(url)
     if markdown:
         chunks=website_splitter.split(markdown)
         feed_path=feed_dir/f"{id}"
