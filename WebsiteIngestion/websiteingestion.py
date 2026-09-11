@@ -4,6 +4,7 @@ import asyncio
 import uuid
 import shutil
 import anyio
+from playwright.async_api import async_playwright
 from langchain_community.vectorstores import FAISS
 from crawl4ai import (
     AsyncWebCrawler,
@@ -93,6 +94,17 @@ async def ingest_website(url:str):
     else:
         print("No markdown content to process.")
         return None
+
+async def ingest_website2(url:str):
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.goto(url,wait_until="domcontentloaded")
+        await page.wait_for_load_state("load")
+        html=await page.content()
+        text=await page.locator("body").inner_text()
+        await browser.close()
+        return text
 
 async def update_website(url:str,id:str):
     markdown=await website_crawl(url)
