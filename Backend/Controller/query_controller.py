@@ -4,8 +4,6 @@ from pydantic import BaseModel
 from Query.DirectQuery import get_all_chunks
 from LLM.Llm import generate_answer
 from fastapi import Query
-router = APIRouter()
-
 
 class QueryRequest(BaseModel):
     question: str
