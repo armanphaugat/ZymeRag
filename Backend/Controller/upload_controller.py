@@ -39,7 +39,7 @@ async def upload_pdf(file: UploadFile = File(...), name: str = Form(...), idempo
         if upload_id_pdf is None:
             idempotent_keys.pop(idempotent_key, None)
             raise HTTPException(status_code=400, detail="Failed to upload PDF")
-        await link_user_to_content(upload_id_pdf, user_id)
+        await link_user_to_content(user_id, upload_id_pdf)
         return {"message": "PDF uploaded successfully", "id": upload_id_pdf}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -63,7 +63,7 @@ async def upload_docx(file: UploadFile = File(...), name: str = Form(...), idemp
         if upload_id_docx is None:
             idempotent_keys.pop(idempotent_key, None)
             raise HTTPException(status_code=400, detail="Failed to upload docx")
-        await link_user_to_content(upload_id_docx, user_id)
+        await link_user_to_content(user_id, upload_id_docx)
         return {"message": "docx uploaded successfully", "id": upload_id_docx}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -86,7 +86,7 @@ async def upload_image(file: UploadFile = File(...), name: str = Form(...), idem
         if upload_id_image is None:
             idempotent_keys.pop(idempotent_key, None)
             raise HTTPException(status_code=400, detail="Failed to upload image")
-        await link_user_to_content(upload_id_image, user_id)
+        await link_user_to_content(user_id, upload_id_image)
         return {"message": "image uploaded successfully", "id": upload_id_image}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -109,7 +109,7 @@ async def upload_csv(file: UploadFile = File(...), name: str = Form(...), idempo
         if upload_id_csv is None:
             idempotent_keys.pop(idempotent_key, None)
             raise HTTPException(status_code=400, detail="Failed to upload csv")
-        await link_user_to_content(upload_id_csv, user_id)
+        await link_user_to_content(user_id, upload_id_csv)
         return {"message": "csv uploaded successfully", "id": upload_id_csv}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) 
@@ -132,7 +132,7 @@ async def upload_audio(file: UploadFile = File(...), name: str = Form(...), idem
         if upload_id_audio is None:
             idempotent_keys.pop(idempotent_key, None)
             raise HTTPException(status_code=400, detail="Failed to upload audio")
-        await link_user_to_content(upload_id_audio, user_id)
+        await link_user_to_content(user_id, upload_id_audio)
         return {"message": "audio uploaded successfully", "id": upload_id_audio}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -155,7 +155,7 @@ async def upload_video(file: UploadFile = File(...), name: str = Form(...), idem
         if upload_id_video is None:
             idempotent_keys.pop(idempotent_key, None)
             raise HTTPException(status_code=400, detail="Failed to upload video")
-        await link_user_to_content(upload_id_video, user_id)
+        await link_user_to_content(user_id, upload_id_video)
         return {"message": "video uploaded successfully", "id": upload_id_video}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
