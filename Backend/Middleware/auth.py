@@ -1,16 +1,12 @@
 import os
 
 import jwt
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-
-
+from fastapi import Request, HTTPException
 
 ACCESS_TOKEN_SECRET = os.getenv("ACCESS_TOKEN_SECRET")
 if not ACCESS_TOKEN_SECRET:
     raise RuntimeError("ACCESS_TOKEN_SECRET environment variable is not set")
 
-app = FastAPI()
 
 async def verify_token(token: str):
     try:
@@ -23,20 +19,21 @@ async def verify_token(token: str):
         print("Access token expired")
         return None
     except jwt.InvalidTokenError as e:
-        print("Invalid access token: %s", e)
+        print("Invalid access token:", e)
         return None
 
-@app.middleware("http")
-async def auth_middleware(request: Request, call_next):
+
+async def auth_middleware(request: Request):
     token = request.cookies.get("access_token")
     if not token:
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
-            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+            raise HTTPException(status_code=401, detail="Unauthorized")
         token = auth_header.split(" ", 1)[1]
 
     user_id = await verify_token(token)
     if not user_id:
-        return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+        raise HTTPException(status_code=403, detail="Forbidden")
+
     request.state.user_id = user_id
-    return await call_next(request)
+    return user_id
