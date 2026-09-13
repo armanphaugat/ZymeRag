@@ -2,16 +2,17 @@ from pathlib import Path as SyncPath
 import asyncio
 from io import BytesIO
 import pandas as pd
-from Splitter.PdfSplitter import PdfTextSplitter
+
 import uuid
 from Embeddings.Embeddingmaker import Embedder
 from langchain_core.documents import Document
 from Dbhelper.pdf_db_helper import save_content_to_database
 BASE_DIR=SyncPath("Data").resolve()
 content_dir=BASE_DIR/"Content"
-pdf_splitter = PdfTextSplitter()
-embedding_maker = Embedder()
 
+from Splitter.PdfSplitter import pdf_splitter
+from Embeddings.Embeddingmaker import embedder as embedding_maker
+from langchain_community.vectorstores import FAISS
 def _csv_to_documents_sync(csv_bytes: bytes) -> list[Document]:
     df = pd.read_csv(BytesIO(csv_bytes))
     documents = []

@@ -1,3 +1,5 @@
+import torch
+torch.set_num_threads(1)
 from sentence_transformers import SentenceTransformer
 from langchain_core.embeddings import Embeddings
 
@@ -19,3 +21,5 @@ class Embedder(Embeddings):
             query,
             normalize_embeddings=True
         ).astype("float32").tolist()
+
+embedder=Embedder()

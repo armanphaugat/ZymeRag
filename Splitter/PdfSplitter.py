@@ -41,3 +41,5 @@ class PdfTextSplitter:
         sections = self.header_splitter.split_text(markdown)
         chunks = self.text_splitter.split_documents(sections)
         return chunks
+
+pdf_splitter = PdfTextSplitter()

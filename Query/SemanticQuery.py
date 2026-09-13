@@ -1,5 +1,4 @@
-from Embeddings.Embeddingmaker import Embedder
-embedder=Embedder()
+from Embeddings.Embeddingmaker import embedder 
 
 from pathlib import Path
 BASE_DIR=Path("Data").resolve()

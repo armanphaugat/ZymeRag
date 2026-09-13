@@ -8,7 +8,7 @@ torch._dynamo.config.suppress_errors = True
 import pymupdf
 from pathlib import Path as SyncPath
 import anyio
-from Splitter.PdfSplitter import PdfTextSplitter
+
 import uuid
 import pickle
 from Embeddings.Embeddingmaker import Embedder
@@ -29,8 +29,8 @@ from Dbhelper.pdf_db_helper import save_content_to_database
 
 BASE_DIR = SyncPath("Data").resolve()
 content_dir = BASE_DIR / "Content"
-pdf_splitter = PdfTextSplitter()
-embedding_maker = Embedder()
+from Splitter.PdfSplitter import pdf_splitter
+from Embeddings.Embeddingmaker import embedder as embedding_maker
 
 
 def _convert_pdf_sync(stream: BytesIO, filename: str):
