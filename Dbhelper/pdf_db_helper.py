@@ -98,3 +98,17 @@ async def delete_content_from_database(content_id: str) -> bool:
     except Exception:
         logger.exception("[pdf_db_helper] Unexpected error soft deleting document with content_id %s", content_id)
         return False
+
+async def get_all_documents() -> list:
+    """Fetch all active content records from contents table."""
+    try:
+        async with AsyncDB() as s:
+            rows = (
+                await s.execute(
+                    text("SELECT * FROM contents WHERE deleted_at IS NULL ORDER BY content_id DESC")
+                )
+            ).mappings().all()
+            return [dict(r) for r in rows]
+    except Exception as e:
+        logger.exception("[pdf_db_helper] Database error fetching all documents: %s", e)
+        return []

@@ -54,8 +54,12 @@ async def auth_middleware(request: Request, call_next):
     """
     Global authentication middleware.
     Checks JWT access token from cookies or Authorization Bearer header.
-    Bypasses documentation and public health routes.
+    Bypasses documentation, CORS preflights, and public health routes.
     """
+    # Allow CORS preflight OPTIONS requests through unblocked
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
     path = request.url.path
 
     # Bypass public routes

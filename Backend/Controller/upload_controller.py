@@ -151,3 +151,9 @@ async def upload_video(file: UploadFile = File(...), name: str = Form(...), idem
         return {"message": "video uploaded successfully", "id": upload_id_video}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+async def list_documents_handler():
+    """List all active uploaded policy documents."""
+    from Dbhelper.pdf_db_helper import get_all_documents
+    docs = await get_all_documents()
+    return {"total": len(docs), "documents": docs}
