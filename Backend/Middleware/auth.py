@@ -16,14 +16,14 @@ async def verify_token(token: str):
     try:
         payload = jwt.decode(token, ACCESS_TOKEN_SECRET, algorithms=["HS256"])
         if payload.get("type") != "access":
-            print.warning("Token with wrong type presented as access token")
+            print("Token with wrong type presented as access token")
             return None
         return payload.get("user_id")
     except jwt.ExpiredSignatureError:
-        print.info("Access token expired")
+        print("Access token expired")
         return None
     except jwt.InvalidTokenError as e:
-        print.info("Invalid access token: %s", e)
+        print("Invalid access token: %s", e)
         return None
 
 @app.middleware("http")
