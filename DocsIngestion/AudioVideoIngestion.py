@@ -3,8 +3,10 @@ import os
 import tempfile
 import uuid
 from pathlib import Path as SyncPath
-
+import re
+import pickle
 import ffmpeg
+from rank_bm25 import BM25Okapi
 from Dbhelper.pdf_db_helper import save_content_to_database
 
 from langchain_community.vectorstores import FAISS
@@ -15,6 +17,9 @@ from Splitter.PdfSplitter import pdf_splitter
 from Embeddings.Embeddingmaker import embedder as embedding_maker
 
 _whisper_model = None
+
+def tokenize(text: str):
+    return re.findall(r"\b\w+\b", text.lower())
 
 def get_whisper_model():
     global _whisper_model
@@ -45,8 +50,34 @@ def extract_audio_from_video(video_path: str, audio_out_path: str) -> None:
 
 
 def _build_and_save_index_sync(chunks, content_path: SyncPath):
-    vectorstore = FAISS.from_documents(chunks, embedding_maker)
-    vectorstore.save_local(str(content_path))
+    vectorstore = FAISS.from_documents(
+        chunks,
+        embedding_maker
+    )
+    vectorstore.save_local(
+        str(content_path)
+    )
+    documents = [
+        chunk.page_content
+        for chunk in chunks
+    ]
+    tokenized_documents = [
+        tokenize(document)
+        for document in documents
+    ]
+    bm25 = BM25Okapi(
+        tokenized_documents
+    )
+    bm25_data = {
+        "documents": documents,
+        "bm25": bm25
+    }
+    bm25_path = content_path / "bm25.pkl"
+    with open(bm25_path, "wb") as f:
+        pickle.dump(
+            bm25_data,
+            f
+        )
 
 
 async def read_text_from_audio(file) -> str:
