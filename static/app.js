@@ -1,5 +1,5 @@
 /**
- * ZymeRag Developer Dashboard - Core Application Engine
+ * Nori AI Dashboard Engine - Left Sidebar & Workspace Controls
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -13,10 +13,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const statSuccessRate = document.getElementById('statSuccessRate');
     const statAvgLatency = document.getElementById('statAvgLatency');
 
-    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabBtns = document.querySelectorAll('.nav-item');
     const tabContents = document.querySelectorAll('.tab-content');
 
-    const endpointCards = document.querySelectorAll('.endpoint-card');
+    const sourceTiles = document.querySelectorAll('.source-tile');
     const dropzone = document.getElementById('dropzone');
     const fileInput = document.getElementById('fileInput');
     const filePreviewBanner = document.getElementById('filePreviewBanner');
@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let sessionHistory = [];
     let apiLogs = [];
 
-    // Helper: Toast Notifications
+    // Toast Notifications
     function showToast(message, type = 'info') {
         const icons = { info: 'ℹ️', success: '✅', error: '❌', warning: '⚠️' };
         toastIcon.textContent = icons[type] || 'ℹ️';
@@ -97,7 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => toast.classList.add('hidden'), 3500);
     }
 
-    // Helper: Syntax Highlighting for JSON
+    // Syntax Highlighting for JSON
     function syntaxHighlightJSON(json) {
         if (typeof json !== 'string') {
             json = JSON.stringify(json, null, 2);
@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Helper: Format File Sizes
+    // Bytes Formatter
     function formatBytes(bytes) {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    // Helper: UUID v4
+    // UUID Generator
     function generateUUID() {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
             const r = Math.random() * 16 | 0;
@@ -140,10 +140,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     genUuidBtn.addEventListener('click', () => {
         idempotentKeyInput.value = generateUUID();
-        showToast('Generated new Idempotent Key', 'info');
+        showToast('Generated new Idempotency Key', 'info');
     });
 
-    // Navigation Tabs
+    // Navigation Pills / Sidebar Tabs
     tabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             tabBtns.forEach(b => b.classList.remove('active'));
@@ -154,20 +154,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Endpoint Selection Cards Grid
-    endpointCards.forEach(card => {
-        card.addEventListener('click', () => {
-            endpointCards.forEach(c => c.classList.remove('active'));
-            card.classList.add('active');
-            selectedEndpoint = card.getAttribute('data-endpoint');
-            detectedEndpointBadge.textContent = card.querySelector('.ep-name').textContent;
+    // Source Selection Tiles
+    sourceTiles.forEach(tile => {
+        tile.addEventListener('click', () => {
+            sourceTiles.forEach(t => t.classList.remove('active'));
+            tile.classList.add('active');
+            selectedEndpoint = tile.getAttribute('data-endpoint');
+            detectedEndpointBadge.textContent = tile.querySelector('.t-name').textContent;
         });
     });
 
-    // Ping API Backend Connection
+    // Ping API Backend
     async function pingBackend() {
         const baseUrl = serverUrlInput.value.replace(/\/$/, '');
-        statusDot.className = 'pulse-dot';
+        statusDot.className = 'pulse-indicator';
         statusText.textContent = 'Pinging...';
 
         try {
@@ -176,22 +176,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const elapsed = Math.round(performance.now() - startTime);
 
             if (res.ok) {
-                statusDot.className = 'pulse-dot online';
-                statusText.textContent = `Online (${elapsed}ms)`;
+                statusDot.className = 'pulse-indicator online';
+                statusText.textContent = `System Online (${elapsed}ms)`;
             } else {
-                statusDot.className = 'pulse-dot offline';
+                statusDot.className = 'pulse-indicator offline';
                 statusText.textContent = `HTTP ${res.status}`;
             }
         } catch (err) {
-            statusDot.className = 'pulse-dot offline';
-            statusText.textContent = 'Offline';
+            statusDot.className = 'pulse-indicator offline';
+            statusText.textContent = 'System Offline';
         }
     }
 
     pingBtn.addEventListener('click', pingBackend);
     pingBackend();
 
-    // Extension to Endpoint Mapper
+    // File Extension to Endpoint Mapper
     function mapFileToEndpoint(file) {
         if (!file) return null;
         const ext = file.name.split('.').pop().toLowerCase();
@@ -208,7 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return extMap[ext] || '/upload/upload_pdf';
     }
 
-    // Drag & Drop Handlers
+    // Drag & Drop Handling
     ['dragenter', 'dragover'].forEach(name => {
         dropzone.addEventListener(name, (e) => {
             e.preventDefault();
@@ -241,23 +241,23 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedFile = file;
         selectedEndpoint = mapFileToEndpoint(file);
 
-        // Highlight matching endpoint card
-        endpointCards.forEach(c => {
-            if (c.getAttribute('data-endpoint') === selectedEndpoint) {
-                c.classList.add('active');
-                detectedEndpointBadge.textContent = c.querySelector('.ep-name').textContent;
+        // Highlight matching source tile
+        sourceTiles.forEach(t => {
+            if (t.getAttribute('data-endpoint') === selectedEndpoint) {
+                t.classList.add('active');
+                detectedEndpointBadge.textContent = t.querySelector('.t-name').textContent;
             } else {
-                c.classList.remove('active');
+                t.classList.remove('active');
             }
         });
 
-        // Set UI Preview
+        // Set Preview Details
         previewFileName.textContent = file.name;
         previewFileSize.textContent = formatBytes(file.size);
-        previewFileType.textContent = file.type || 'Binary Stream';
+        previewFileType.textContent = file.type || 'Binary Document';
         filePreviewBanner.classList.remove('hidden');
 
-        // Auto doc name
+        // Auto document title
         if (!docNameInput.value.trim()) {
             const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
             docNameInput.value = baseName;
@@ -273,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
         submitUploadBtn.disabled = true;
     });
 
-    // Form Submit: Ingestion Request
+    // Form Submit: Ingest Document
     uploadForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (!selectedFile) return;
@@ -287,11 +287,11 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('name', docName);
         if (idempotentKey) formData.append('idempotent_key', idempotentKey);
 
-        // UI Loading
+        // UI Loading State
         submitUploadBtn.disabled = true;
         uploadBtnSpinner.classList.remove('hidden');
-        uploadBtnText.textContent = 'Ingesting Document...';
-        responseStatusBadge.className = 'status-badge status-idle';
+        uploadBtnText.textContent = 'Ingesting Document to Knowledge Base...';
+        responseStatusBadge.className = 'status-pill status-idle';
         responseStatusBadge.textContent = 'Processing...';
 
         const startTime = performance.now();
@@ -318,9 +318,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (res.ok) {
                 totalSuccessCount++;
                 totalIngestedCount++;
-                responseStatusBadge.className = 'status-badge status-success';
+                responseStatusBadge.className = 'status-pill status-success';
                 responseStatusBadge.textContent = '200 OK';
-                showToast('Document ingested successfully!', 'success');
+                showToast('Document ingested successfully to Nori Knowledge Base!', 'success');
 
                 if (data.id) {
                     lastUploadedId = data.id;
@@ -328,7 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     addHistoryItem(docName, data.id, selectedEndpoint);
                 }
             } else {
-                responseStatusBadge.className = 'status-badge status-error';
+                responseStatusBadge.className = 'status-pill status-error';
                 responseStatusBadge.textContent = `HTTP ${status}`;
                 showToast(data.detail || 'Ingestion failed', 'error');
             }
@@ -338,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (err) {
             const duration = Math.round(performance.now() - startTime);
-            responseStatusBadge.className = 'status-badge status-error';
+            responseStatusBadge.className = 'status-pill status-error';
             responseStatusBadge.textContent = 'Network Error';
             jsonResponseViewer.innerHTML = syntaxHighlightJSON({ error: err.message });
             showToast(`Request failed: ${err.message}`, 'error');
@@ -346,11 +346,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             submitUploadBtn.disabled = false;
             uploadBtnSpinner.classList.add('hidden');
-            uploadBtnText.textContent = '🚀 Execute Ingestion';
+            uploadBtnText.textContent = '🚀 Ingest Document to Knowledge Base';
         }
     });
 
-    // Update Analytics Bar
+    // Update Analytics Metrics
     function updateMetrics() {
         statTotalIngested.textContent = totalIngestedCount;
         const rate = totalRequests > 0 ? Math.round((totalSuccessCount / totalRequests) * 100) : 100;
@@ -359,11 +359,11 @@ document.addEventListener('DOMContentLoaded', () => {
         statAvgLatency.textContent = `${avg} ms`;
     }
 
-    // Copy JSON Viewer
+    // Copy Response JSON
     copyJsonBtn.addEventListener('click', () => {
         if (rawLastResponse) {
             navigator.clipboard.writeText(JSON.stringify(rawLastResponse, null, 2));
-            showToast('API Response JSON copied!', 'info');
+            showToast('Response JSON copied to clipboard!', 'info');
         }
     });
 
@@ -381,7 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Session History Management
+    // Session Knowledge History
     function addHistoryItem(name, id, endpoint) {
         sessionHistory.unshift({ name, id, endpoint, time: new Date().toLocaleTimeString() });
         renderHistory();
@@ -389,24 +389,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderHistory() {
         if (sessionHistory.length === 0) {
-            historyList.innerHTML = '<div class="empty-history"><div class="empty-icon">📂</div><p>No documents uploaded in this session yet.</p></div>';
+            historyList.innerHTML = '<div class="empty-state"><div class="e-icon">📂</div><p>No knowledge sources added in this session yet.</p></div>';
             return;
         }
 
         historyList.innerHTML = sessionHistory.map(item => `
-            <div class="history-card-item">
-                <div class="history-card-info">
-                    <span class="history-doc-name">${escapeHtml(item.name)}</span>
-                    <span class="history-doc-id">ID: ${item.id}</span>
+            <div class="history-item-card">
+                <div class="history-item-info">
+                    <span class="history-item-title">${escapeHtml(item.name)}</span>
+                    <span class="history-item-sub">ID: ${item.id}</span>
                 </div>
-                <button class="btn btn-glass btn-sm" onclick="copyText('${item.id}')">Copy</button>
+                <button class="btn btn-secondary btn-sm" onclick="copyText('${item.id}')">Copy</button>
             </div>
         `).join('');
     }
 
     window.copyText = (text) => {
         navigator.clipboard.writeText(text);
-        showToast(`Copied: ${text}`, 'info');
+        showToast(`Copied ID: ${text}`, 'info');
     };
 
     clearHistoryBtn.addEventListener('click', () => {
@@ -414,7 +414,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderHistory();
     });
 
-    // Delete Form Handler
+    // Delete Form Handling
     deleteForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const idToDelete = deleteIdInput.value.trim();
@@ -444,19 +444,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (res.ok) {
                 totalSuccessCount++;
-                deleteStatusBadge.className = 'status-badge status-success';
+                deleteStatusBadge.className = 'status-pill status-success';
                 deleteStatusBadge.textContent = '200 OK';
-                showToast('Content successfully deleted!', 'success');
+                showToast('Record purged successfully!', 'success');
             } else {
-                deleteStatusBadge.className = 'status-badge status-error';
+                deleteStatusBadge.className = 'status-pill status-error';
                 deleteStatusBadge.textContent = `HTTP ${res.status}`;
-                showToast(data.detail || 'Deletion failed', 'error');
+                showToast(data.detail || 'Purge failed', 'error');
             }
 
             updateMetrics();
             addLogEntry('DELETE', '/delete/delete_content', res.status, duration, data);
         } catch (err) {
-            deleteStatusBadge.className = 'status-badge status-error';
+            deleteStatusBadge.className = 'status-pill status-error';
             deleteStatusBadge.textContent = 'Error';
             deleteJsonViewer.innerHTML = syntaxHighlightJSON({ error: err.message });
             showToast(`Delete request failed: ${err.message}`, 'error');
@@ -466,7 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Realtime Activity Logging
+    // Activity Logging
     function addLogEntry(method, endpoint, status, duration, response) {
         apiLogs.unshift({
             timestamp: new Date().toLocaleTimeString(),
@@ -491,19 +491,19 @@ document.addEventListener('DOMContentLoaded', () => {
         );
 
         if (filtered.length === 0) {
-            logsTableBody.innerHTML = '<tr><td colspan="7" class="empty-logs">No API activity logs found.</td></tr>';
+            logsTableBody.innerHTML = '<tr><td colspan="7" class="empty-table">No API activity logs match your filter.</td></tr>';
             return;
         }
 
         logsTableBody.innerHTML = filtered.map(log => `
             <tr>
                 <td>${log.timestamp}</td>
-                <td><strong style="color: ${log.method === 'DELETE' ? '#ef4444' : '#6366f1'}">${log.method}</strong></td>
+                <td><strong style="color: ${log.method === 'DELETE' ? '#ef4444' : '#10b981'}">${log.method}</strong></td>
                 <td>${escapeHtml(log.endpoint)}</td>
-                <td><span class="status-badge ${log.status === 200 ? 'status-success' : 'status-error'}">${log.status}</span></td>
+                <td><span class="status-pill ${log.status === 200 ? 'status-success' : 'status-error'}">${log.status}</span></td>
                 <td>${log.duration}</td>
                 <td style="max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(log.response)}</td>
-                <td><button class="btn-icon-sm" onclick="copyText('${escapeHtml(log.response).replace(/'/g, "\\'")}')">Copy JSON</button></td>
+                <td><button class="btn-code-action" onclick="copyText('${escapeHtml(log.response).replace(/'/g, "\\'")}')">Copy JSON</button></td>
             </tr>
         `).join('');
     }
