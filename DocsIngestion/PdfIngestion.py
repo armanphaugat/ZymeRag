@@ -78,7 +78,7 @@ def _build_and_save_index_sync(chunks, content_path: SyncPath):
         pickle.dump(bm25_data, f)
 
 
-async def ingest_pdf(file, name: str):
+async def ingest_pdf(file, name: str, trigger_extraction: bool = True):
     """
     Ingests a policy document (PDF or DOCX):
     1. Converts document to Markdown via Docling.
@@ -107,12 +107,13 @@ async def ingest_pdf(file, name: str):
             saved_chunks = await save_policy_chunks(doc_id, chunks, str(content_path))
             print(f"[PolicyIngestion] Persisted {len(saved_chunks)} chunks to policy_chunks for doc {doc_id}")
 
-            # Trigger offline rule extraction as a background task
-            try:
-                from Backend.RuleExtraction.extract_rules import extract_rules_from_document
-                asyncio.create_task(extract_rules_from_document(doc_id, saved_chunks))
-            except Exception as ex:
-                print(f"[PolicyIngestion] Warning: Could not launch background rule extraction: {ex}")
+            # Trigger offline rule extraction as a background task if requested
+            if trigger_extraction:
+                try:
+                    from Backend.RuleExtraction.extract_rules import extract_rules_from_document
+                    asyncio.create_task(extract_rules_from_document(doc_id, saved_chunks, content_path_str=str(content_path)))
+                except Exception as ex:
+                    print(f"[PolicyIngestion] Warning: Could not launch background rule extraction: {ex}")
 
             return doc_id
 

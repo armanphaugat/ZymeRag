@@ -21,7 +21,7 @@ class TestApiEndpoints(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["status"], "healthy")
-        self.assertIn(data["service"], ["Axiom Gateway", "AI Action Gateway"])
+        self.assertIn(data["service"], ["Axiom Gateway", "AI Action Gateway", "ZymeRag Axiom Gateway"])
 
     def test_unauthenticated_request_returns_401(self):
         """Verify endpoints without auth token are rejected by auth middleware."""

@@ -25,66 +25,85 @@ def resolve_dot_path(data: Dict[str, Any], path: str) -> Tuple[bool, Any]:
     return True, curr
 
 
-def evaluate_condition(condition: Dict[str, Any], arguments: Dict[str, Any]) -> bool:
+def evaluate_condition(condition: Any, arguments: Dict[str, Any]) -> bool:
     """
     Deterministically evaluates a rule condition against action arguments.
-    Supported operators: ==, !=, >, >=, <, <=, in, not_in, contains, regex.
+    Supports single conditions, lists of conditions (AND), and logical operators ("all", "and", "any", "or").
     """
     if not condition:
-        return True  # An empty condition matches unconditionally
-
-    field = condition.get("field")
-    operator = condition.get("operator", "==").strip().lower()
-    target_value = condition.get("value")
-
-    # If no field specified, condition is considered matched
-    if not field:
         return True
 
-    found, actual_value = resolve_dot_path(arguments, field)
-    if not found:
-        return False
+    # If condition is a list of sub-conditions, ALL must be True (AND logic)
+    if isinstance(condition, list):
+        return all(evaluate_condition(c, arguments) for c in condition)
 
-    try:
-        if operator in ("==", "eq"):
-            return actual_value == target_value
-        elif operator in ("!=", "neq"):
-            return actual_value != target_value
-        elif operator in (">", "gt"):
-            return float(actual_value) > float(target_value)
-        elif operator in (">=", "gte"):
-            return float(actual_value) >= float(target_value)
-        elif operator in ("<", "lt"):
-            return float(actual_value) < float(target_value)
-        elif operator in ("<=", "lte"):
-            return float(actual_value) <= float(target_value)
-        elif operator in ("in", "between"):
-            if isinstance(target_value, (list, tuple)) and len(target_value) == 2 and all(isinstance(x, (int, float)) for x in target_value):
-                try:
-                    val = float(actual_value)
-                    low, high = sorted([float(target_value[0]), float(target_value[1])])
-                    return low <= val <= high
-                except (ValueError, TypeError):
-                    pass
-            if isinstance(target_value, (list, tuple, set, str)):
-                return actual_value in target_value
+    if isinstance(condition, dict):
+        if "all" in condition and isinstance(condition["all"], list):
+            return all(evaluate_condition(c, arguments) for c in condition["all"])
+        if "and" in condition and isinstance(condition["and"], list):
+            return all(evaluate_condition(c, arguments) for c in condition["and"])
+        if "any" in condition and isinstance(condition["any"], list):
+            return any(evaluate_condition(c, arguments) for c in condition["any"])
+        if "or" in condition and isinstance(condition["or"], list):
+            return any(evaluate_condition(c, arguments) for c in condition["or"])
+
+        field = condition.get("field")
+        operator = condition.get("operator", "==").strip().lower()
+        target_value = condition.get("value")
+
+        if not field:
+            return True
+
+        found, actual_value = resolve_dot_path(arguments, field)
+        if not found:
             return False
-        elif operator in ("not_in",):
-            if isinstance(target_value, (list, tuple, set, str)):
-                return actual_value not in target_value
+
+        try:
+            if operator in ("==", "eq"):
+                if isinstance(target_value, bool) or isinstance(actual_value, bool):
+                    return bool(actual_value) == bool(target_value)
+                return actual_value == target_value
+            elif operator in ("!=", "neq"):
+                if isinstance(target_value, bool) or isinstance(actual_value, bool):
+                    return bool(actual_value) != bool(target_value)
+                return actual_value != target_value
+            elif operator in (">", "gt"):
+                return float(actual_value) > float(target_value)
+            elif operator in (">=", "gte"):
+                return float(actual_value) >= float(target_value)
+            elif operator in ("<", "lt"):
+                return float(actual_value) < float(target_value)
+            elif operator in ("<=", "lte"):
+                return float(actual_value) <= float(target_value)
+            elif operator in ("in", "between"):
+                if isinstance(target_value, (list, tuple)) and len(target_value) == 2 and all(isinstance(x, (int, float)) for x in target_value):
+                    try:
+                        val = float(actual_value)
+                        low, high = sorted([float(target_value[0]), float(target_value[1])])
+                        return low <= val <= high
+                    except (ValueError, TypeError):
+                        pass
+                if isinstance(target_value, (list, tuple, set, str)):
+                    return actual_value in target_value
+                return False
+            elif operator in ("not_in",):
+                if isinstance(target_value, (list, tuple, set, str)):
+                    return actual_value not in target_value
+                return False
+            elif operator in ("contains",):
+                if isinstance(actual_value, (list, tuple, set, str)):
+                    return target_value in actual_value
+                return False
+            elif operator in ("regex",):
+                return bool(re.search(str(target_value), str(actual_value)))
+            else:
+                print(f"[PolicyEngine] Unsupported operator '{operator}' in condition.")
+                return False
+        except (ValueError, TypeError) as e:
+            print(f"[PolicyEngine] Type conversion error in condition evaluation: {e}")
             return False
-        elif operator in ("contains",):
-            if isinstance(actual_value, (list, tuple, set, str)):
-                return target_value in actual_value
-            return False
-        elif operator in ("regex",):
-            return bool(re.search(str(target_value), str(actual_value)))
-        else:
-            print(f"[PolicyEngine] Unsupported operator '{operator}' in condition.")
-            return False
-    except (ValueError, TypeError) as e:
-        print(f"[PolicyEngine] Type conversion error in condition evaluation: {e}")
-        return False
+
+    return False
 
 
 async def evaluate_action_policy(action: ToolAction, flow_id: str) -> DecisionResponse:

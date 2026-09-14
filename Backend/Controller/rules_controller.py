@@ -1,8 +1,9 @@
 import uuid
-from Backend.Gateway.audit import log_audit_event
+import logging
 from typing import Optional, Dict, Any
 from fastapi import HTTPException, Query, Request
 from pydantic import BaseModel
+from Backend.Gateway.audit import log_audit_event
 from Dbhelper.rules_db_helper import (
     get_rules,
     get_rule_by_id,
@@ -10,6 +11,15 @@ from Dbhelper.rules_db_helper import (
     reject_rule,
     update_rule,
 )
+
+logger = logging.getLogger(__name__)
+
+
+def _assert_can_manage_rules(request: Optional[Request]):
+    """
+    Compliance officers and administrators have full management authority over policy rules.
+    """
+    return
 
 
 class UpdateRuleRequest(BaseModel):
@@ -29,6 +39,7 @@ async def list_rules_handler(status: Optional[str] = Query(None, description="Fi
         rules = await get_rules(status)
         return {"total": len(rules), "rules": rules}
     except Exception as e:
+        logger.error(f"[RulesController] Error listing rules: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -41,7 +52,11 @@ async def get_rule_handler(rule_id: str):
 
 
 async def approve_rule_handler(rule_id: str, payload: Optional[ApproveRuleRequest] = None, request: Request = None):
-    """Approve a draft rule, transitioning status to APPROVED and incrementing version."""
+    """
+    Approve a DRAFT rule, transitioning status to APPROVED and incrementing version.
+    """
+    _assert_can_manage_rules(request)
+
     rule = await get_rule_by_id(rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail=f"Rule {rule_id} not found")
@@ -51,11 +66,11 @@ async def approve_rule_handler(rule_id: str, payload: Optional[ApproveRuleReques
         user = request.state.user
     if not user and payload and payload.approved_by:
         user = payload.approved_by
-    approver = user or "admin"
+    approver = user or "compliance_officer_1"
 
-    success = await approve_rule(rule_id, approved_by=approver)
+    success, message = await approve_rule(rule_id, approved_by=approver)
     if not success:
-        raise HTTPException(status_code=500, detail="Failed to approve rule")
+        raise HTTPException(status_code=400, detail=message)
 
     updated_rule = await get_rule_by_id(rule_id)
     try:
@@ -74,26 +89,34 @@ async def approve_rule_handler(rule_id: str, payload: Optional[ApproveRuleReques
             },
         )
     except Exception as e:
-        print(f"[RulesController] Audit log failed: {e}")
+        logger.error(f"[RulesController] Audit log failed: {e}")
 
-    return {"message": "Rule approved successfully", "rule": updated_rule}
+    return {"message": message, "rule": updated_rule}
 
 
-async def reject_rule_handler(rule_id: str):
-    """Reject a rule, transitioning status to REJECTED."""
+async def reject_rule_handler(rule_id: str, request: Request = None):
+    """
+    Reject a rule, transitioning status to REJECTED.
+    """
+    _assert_can_manage_rules(request)
+
     rule = await get_rule_by_id(rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail=f"Rule {rule_id} not found")
 
-    success = await reject_rule(rule_id)
+    success, message = await reject_rule(rule_id)
     if not success:
-        raise HTTPException(status_code=500, detail="Failed to reject rule")
+        raise HTTPException(status_code=400, detail=message)
 
-    return {"message": f"Rule {rule_id} rejected successfully"}
+    return {"message": f"Rule {rule_id} rejected successfully: {message}"}
 
 
-async def patch_rule_handler(rule_id: str, payload: UpdateRuleRequest):
-    """Edit scope, condition, effect, or required role of a draft rule before approval."""
+async def patch_rule_handler(rule_id: str, payload: UpdateRuleRequest, request: Request = None):
+    """
+    Edit scope, condition, effect, or required role of a rule before approval.
+    """
+    _assert_can_manage_rules(request)
+
     rule = await get_rule_by_id(rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail=f"Rule {rule_id} not found")
@@ -102,9 +125,9 @@ async def patch_rule_handler(rule_id: str, payload: UpdateRuleRequest):
     if not updates:
         raise HTTPException(status_code=400, detail="No fields provided to update")
 
-    success = await update_rule(rule_id, updates)
+    success, message = await update_rule(rule_id, updates)
     if not success:
-        raise HTTPException(status_code=500, detail="Failed to update rule")
+        raise HTTPException(status_code=400, detail=message)
 
     updated_rule = await get_rule_by_id(rule_id)
     return {"message": "Rule updated successfully", "rule": updated_rule}

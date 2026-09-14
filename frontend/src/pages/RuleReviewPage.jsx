@@ -21,53 +21,93 @@ export default function RuleReviewPage() {
   const [alert, setAlert] = useState(null);
   const [acting, setActing] = useState({});
   const [stats, setStats] = useState({ draft: 0, approved: 0, rejected: 0 });
+  const [isStale, setIsStale] = useState(false);
 
-  const fetchRules = useCallback(async (status) => {
+  // Authoritative fetch from server (initial load and manual refresh)
+  const loadRules = useCallback(async () => {
     setLoading(true);
     try {
-      const url = status ? `${API}/rules?status=${status}` : `${API}/rules`;
-      const r = await fetch(url, { headers: headers() });
+      const r = await fetch(`${API}/rules`, { headers: headers() });
       if (r.ok) {
         const d = await r.json();
-        setRules(d.rules || d || []);
+        const all = d.rules || d || [];
+        setRules(all);
+        setStats({
+          draft: all.filter(r => r.status === 'DRAFT').length,
+          approved: all.filter(r => r.status === 'APPROVED').length,
+          rejected: all.filter(r => r.status === 'REJECTED').length,
+        });
+        setIsStale(false);
       }
-    } catch { setRules([]); }
-    setLoading(false);
+    } catch {
+      setRules([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const fetchStats = useCallback(async () => {
-    const statuses = ['DRAFT', 'APPROVED', 'REJECTED'];
-    const counts = {};
-    await Promise.all(statuses.map(async s => {
-      try {
-        const r = await fetch(`${API}/rules?status=${s}`, { headers: headers() });
-        if (r.ok) { const d = await r.json(); counts[s.toLowerCase()] = (d.rules || d || []).length; }
-      } catch { counts[s.toLowerCase()] = 0; }
-    }));
-    setStats(counts);
-  }, []);
-
-  useEffect(() => { fetchRules(filter); fetchStats(); }, [filter, fetchRules, fetchStats]);
+  useEffect(() => {
+    loadRules();
+  }, [loadRules]);
 
   const act = async (ruleId, action) => {
+    const targetRule = rules.find(r => r.rule_id === ruleId);
+    if (!targetRule) return;
+
+    // Snapshot for rollback on failure
+    const prevRules = rules;
+    const prevStats = stats;
+    const prevStale = isStale;
+
+    const newStatus = action === 'approve' ? 'APPROVED' : 'REJECTED';
+    const oldStatusKey = targetRule.status ? targetRule.status.toLowerCase() : 'draft';
+    const newStatusKey = action === 'approve' ? 'approved' : 'rejected';
+    const approver = localStorage.getItem('zymerag_user') || 'compliance_officer_1';
+
+    // 1. Optimistically update rules list
+    setRules(prev => prev.map(r => r.rule_id === ruleId ? { ...r, status: newStatus, approved_by: approver } : r));
+
+    // 2. Optimistically update local counters (mark as approximate/stale until refreshed)
+    setStats(prev => ({
+      ...prev,
+      [oldStatusKey]: Math.max(0, (prev[oldStatusKey] ?? 1) - 1),
+      [newStatusKey]: (prev[newStatusKey] ?? 0) + 1,
+    }));
+    setIsStale(true);
+
+    // 3. Mark rule-level acting state (action-level spinner/disable on button only)
     setActing(a => ({ ...a, [ruleId]: action }));
+
     try {
       const endpoint = `${API}/rules/${ruleId}/${action}`;
       const r = await fetch(endpoint, {
         method: 'POST',
         headers: headers(),
-        body: JSON.stringify({ approved_by: localStorage.getItem('zymerag_user') || 'compliance_officer_1' }),
+        body: JSON.stringify({ approved_by: approver }),
       });
+
       if (r.ok) {
         setAlert({ type: 'success', msg: `Rule ${ruleId.slice(0, 8)}… ${action}d successfully.` });
-        fetchRules(filter); fetchStats();
       } else {
-        const d = await r.json();
+        const d = await r.json().catch(() => ({}));
+        // Rollback state on API failure
+        setRules(prevRules);
+        setStats(prevStats);
+        setIsStale(prevStale);
         setAlert({ type: 'error', msg: d.detail || `Failed to ${action} rule` });
       }
-    } catch (e) { setAlert({ type: 'error', msg: e.message }); }
-    setActing(a => { const n = { ...a }; delete n[ruleId]; return n; });
+    } catch (e) {
+      // Rollback state on network/exception failure
+      setRules(prevRules);
+      setStats(prevStats);
+      setIsStale(prevStale);
+      setAlert({ type: 'error', msg: e.message || `Failed to ${action} rule` });
+    } finally {
+      setActing(a => { const n = { ...a }; delete n[ruleId]; return n; });
+    }
   };
+
+  const displayedRules = filter ? rules.filter(r => r.status === filter) : rules;
 
   return (
     <div className="page">
@@ -77,9 +117,30 @@ export default function RuleReviewPage() {
       </div>
 
       <div className="stat-row">
-        <div className="stat-box"><div className="stat-label">Draft (Pending Review)</div><div className="stat-value" style={{ color: 'var(--draft)' }}>{stats.draft ?? '—'}</div></div>
-        <div className="stat-box"><div className="stat-label">Approved (Active)</div><div className="stat-value green">{stats.approved ?? '—'}</div></div>
-        <div className="stat-box"><div className="stat-label">Rejected</div><div className="stat-value red">{stats.rejected ?? '—'}</div></div>
+        <div className="stat-box">
+          <div className="stat-label">
+            Draft (Pending Review) {isStale && <span style={{ fontSize: 11, color: 'var(--d-gray-400)', fontWeight: 'normal' }}>(approx)</span>}
+          </div>
+          <div className="stat-value" style={{ color: 'var(--draft)' }}>
+            {isStale && stats.draft !== null ? `~${stats.draft}` : (stats.draft ?? '—')}
+          </div>
+        </div>
+        <div className="stat-box">
+          <div className="stat-label">
+            Approved (Active) {isStale && <span style={{ fontSize: 11, color: 'var(--d-gray-400)', fontWeight: 'normal' }}>(approx)</span>}
+          </div>
+          <div className="stat-value green">
+            {isStale && stats.approved !== null ? `~${stats.approved}` : (stats.approved ?? '—')}
+          </div>
+        </div>
+        <div className="stat-box">
+          <div className="stat-label">
+            Rejected {isStale && <span style={{ fontSize: 11, color: 'var(--d-gray-400)', fontWeight: 'normal' }}>(approx)</span>}
+          </div>
+          <div className="stat-value red">
+            {isStale && stats.rejected !== null ? `~${stats.rejected}` : (stats.rejected ?? '—')}
+          </div>
+        </div>
       </div>
 
       {alert && (
@@ -91,7 +152,17 @@ export default function RuleReviewPage() {
 
       <div className="card">
         <div className="card-header">
-          <span className="card-title">Policy Rules</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span className="card-title">Policy Rules</span>
+            <button 
+              className="btn btn-outline btn-sm" 
+              onClick={loadRules} 
+              disabled={loading}
+              title="Sync authoritative rules & counts from database"
+            >
+              ↻ Refresh
+            </button>
+          </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {['DRAFT', 'APPROVED', 'REJECTED', ''].map(s => (
               <button key={s} className={`btn btn-sm ${filter === s ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFilter(s)}>
@@ -103,10 +174,10 @@ export default function RuleReviewPage() {
 
         {loading ? (
           <div className="loading-row"><div className="spinner" /><span>Loading rules…</span></div>
-        ) : rules.length === 0 ? (
+        ) : displayedRules.length === 0 ? (
           <div className="empty-state"><div className="icon">📋</div><p>No {filter || ''} rules found. Upload a policy document to start extraction.</p></div>
         ) : (
-          rules.map(rule => {
+          displayedRules.map(rule => {
             const scope = typeof rule.scope === 'string' ? JSON.parse(rule.scope) : rule.scope || {};
             const cond = typeof rule.condition === 'string' ? JSON.parse(rule.condition) : rule.condition || {};
             return (

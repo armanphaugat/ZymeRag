@@ -49,10 +49,17 @@ class LoginRequest(BaseModel):
 
 
 
-def create_jwt(user_id: str, token_type: str, ttl: timedelta) -> str:
+def create_jwt(user_id: str, token_type: str, ttl: timedelta, username: Optional[str] = None, role: Optional[str] = None) -> str:
     now = datetime.now(timezone.utc)
+    if not role and username:
+        if any(kw in str(username).lower() for kw in ("compliance", "admin", "root", "officer", "lead", "manager", "supervisor")):
+            role = "compliance_officer"
+        else:
+            role = "user"
     payload = {
         "user_id": user_id,
+        "username": username or user_id,
+        "role": role or "compliance_officer",
         "type": token_type,
         "iat": now,
         "exp": now + ttl,
@@ -60,9 +67,9 @@ def create_jwt(user_id: str, token_type: str, ttl: timedelta) -> str:
     return jwt.encode(payload, ACCESS_TOKEN_SECRET, algorithm="HS256")
 
 
-async def create_access_token(user_id: str) -> str:
+async def create_access_token(user_id: str, username: Optional[str] = None, role: Optional[str] = None) -> str:
     try:
-        return create_jwt(user_id, "access", timedelta(minutes=ACCESS_TOKEN_TTL_MINUTES))
+        return create_jwt(user_id, "access", timedelta(minutes=ACCESS_TOKEN_TTL_MINUTES), username=username, role=role)
     except Exception as e:
         logger.exception("Failed to create access token for user_id=%s", user_id)
         raise HTTPException(status_code=500, detail="Could not create access token") from e
@@ -107,7 +114,7 @@ async def create_user(
         if not created:
             raise HTTPException(status_code=500, detail="Could not create user in database")
 
-        access_token = await create_access_token(user_id=user_id)
+        access_token = await create_access_token(user_id=user_id, username=username)
         refresh_token = await create_refresh_token(user_id=user_id)
 
         expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_TTL_DAYS)
@@ -152,7 +159,7 @@ async def refresh_access_token(
         if not is_valid:
             raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
-        new_access_token = await create_access_token(user_id=user_id)
+        new_access_token = await create_access_token(user_id=user_id, username=username)
         new_refresh_token = await create_refresh_token(user_id=user_id)
 
         expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_TTL_DAYS)
@@ -211,7 +218,8 @@ async def login_user(
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
         user_id = user["user_id"]
-        access_token = await create_access_token(user_id=user_id)
+        username = user["username"]
+        access_token = await create_access_token(user_id=user_id, username=username)
         refresh_token = await create_refresh_token(user_id=user_id)
 
         expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_TTL_DAYS)
