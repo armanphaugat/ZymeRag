@@ -49,6 +49,21 @@ def extract_audio_from_video(video_path: str, audio_out_path: str) -> None:
     )
 
 
+def _write_temp_file_sync(file_bytes: bytes, suffix: str) -> str:
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(file_bytes)
+        return tmp.name
+
+
+def _remove_files_sync(*paths: str) -> None:
+    for p in paths:
+        if p and os.path.exists(p):
+            try:
+                os.remove(p)
+            except Exception:
+                pass
+
+
 def _build_and_save_index_sync(chunks, content_path: SyncPath):
     vectorstore = FAISS.from_documents(
         chunks,
@@ -84,14 +99,13 @@ async def read_text_from_audio(file) -> str:
     audio_bytes = await file.read()
     suffix = SyncPath(getattr(file, "filename", "audio.wav")).suffix or ".wav"
 
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp.write(audio_bytes)
-        tmp_path = tmp.name
+    # Thread-safe temp file write
+    tmp_path = await asyncio.to_thread(_write_temp_file_sync, audio_bytes, suffix)
 
     try:
         text = await asyncio.to_thread(transcribe_audio_file, tmp_path)
     finally:
-        os.remove(tmp_path)
+        await asyncio.to_thread(_remove_files_sync, tmp_path)
 
     return text
 
@@ -120,19 +134,15 @@ async def read_text_from_video(file) -> str:
     video_bytes = await file.read()
     v_suffix = SyncPath(getattr(file, "filename", "video.mp4")).suffix or ".mp4"
 
-    with tempfile.NamedTemporaryFile(suffix=v_suffix, delete=False) as tmp_video:
-        tmp_video.write(video_bytes)
-        tmp_video_path = tmp_video.name
-
+    # Thread-safe temp file write for video
+    tmp_video_path = await asyncio.to_thread(_write_temp_file_sync, video_bytes, v_suffix)
     tmp_audio_path = tmp_video_path + ".wav"
 
     try:
         await asyncio.to_thread(extract_audio_from_video, tmp_video_path, tmp_audio_path)
         text = await asyncio.to_thread(transcribe_audio_file, tmp_audio_path)
     finally:
-        for p in (tmp_video_path, tmp_audio_path):
-            if os.path.exists(p):
-                os.remove(p)
+        await asyncio.to_thread(_remove_files_sync, tmp_video_path, tmp_audio_path)
 
     return text
 

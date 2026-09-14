@@ -1,5 +1,5 @@
 from pathlib import Path
-BASE_DIR=Path("Data").resolve()
+BASE_DIR = Path("Data").resolve()
 import asyncio
 import uuid
 import shutil
@@ -11,43 +11,38 @@ from crawl4ai import (
     CrawlerRunConfig,
     CacheMode,
 )
-from Dbhelper.website_db_helper import save_website_to_database,update_website_last_crawled
-from crawl4ai.content_filter_strategy import (
-    PruningContentFilter
-)
-from crawl4ai.markdown_generation_strategy import (
-    DefaultMarkdownGenerator
-)
+from Dbhelper.website_db_helper import save_website_to_database, update_website_last_crawled
+from crawl4ai.content_filter_strategy import PruningContentFilter
+from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from Splitter.WebsiteSplitter import WebsiteTextSplitter
 from Embeddings.Embeddingmaker import Embedder
 from rank_bm25 import BM25Okapi
 import pickle
 import re
-markdown_generator=DefaultMarkdownGenerator(
+
+markdown_generator = DefaultMarkdownGenerator(
     content_filter=PruningContentFilter(
         threshold=0.5,
     )
 )
-website_splitter=WebsiteTextSplitter()
-embedding_maker=Embedder()
-config=CrawlerRunConfig(
-            cache_mode=CacheMode.BYPASS,
-            excluded_tags=["nav","footer","header","style","script"],
-            exclude_external_links=False,
-            remove_overlay_elements=True,
-            remove_consent_popups=True,
-            wait_until="domcontentloaded",
-            scan_full_page=True,
-            markdown_generator=markdown_generator,
-    )
-feed_dir=BASE_DIR/"Feed"
+website_splitter = WebsiteTextSplitter()
+embedding_maker = Embedder()
+config = CrawlerRunConfig(
+    cache_mode=CacheMode.BYPASS,
+    excluded_tags=["nav", "footer", "header", "style", "script"],
+    exclude_external_links=False,
+    remove_overlay_elements=True,
+    remove_consent_popups=True,
+    wait_until="domcontentloaded",
+    scan_full_page=True,
+    markdown_generator=markdown_generator,
+)
+feed_dir = BASE_DIR / "Feed"
 
-def build_and_save_bm25(chunks, path):
+
+def build_and_save_bm25_sync(chunks, path):
     tokenized_documents = [
-        re.findall(
-            r"\b\w+\b",
-            chunk.page_content.lower()
-        )
+        re.findall(r"\b\w+\b", chunk.page_content.lower())
         for chunk in chunks
     ]
     bm25 = BM25Okapi(tokenized_documents)
@@ -59,46 +54,52 @@ def build_and_save_bm25(chunks, path):
             },
             f
         )
-async def website_crawl(url:str):
+
+
+def _build_faiss_and_save_sync(chunks, feed_path):
+    vectorstore = FAISS.from_documents(chunks, embedding_maker)
+    vectorstore.save_local(str(feed_path))
+    return vectorstore
+
+
+async def website_crawl(url: str):
     try:
-        
         async with AsyncWebCrawler() as crawler:
-            result=await crawler.arun(url,config=config)
+            result = await crawler.arun(url, config=config)
         if result.success:
             print("Successfully crawled the website.")
             return result.markdown.fit_markdown
-            
         else:
             print("Failed to crawl the website.")
             return None
     except Exception as e:
         print(f"Error occurred while crawling the website: {e}")
         return None
-    
-async def website_crawl2(url:str):
+
+
+async def website_crawl2(url: str):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
-        await page.goto(url,wait_until="domcontentloaded")
+        await page.goto(url, wait_until="domcontentloaded")
         await page.wait_for_load_state("load")
-        html=await page.content()
-        text=await page.locator("body").inner_text()
+        text = await page.locator("body").inner_text()
         await browser.close()
         return text
 
-async def ingest_website(url:str):
-    markdown=await website_crawl(url)
+
+async def ingest_website(url: str):
+    markdown = await website_crawl(url)
     if markdown is None:
-        markdown=await website_crawl2(url)
+        markdown = await website_crawl2(url)
     if markdown:
-        chunks=website_splitter.split(markdown)
-        id=str(uuid.uuid4())
-        feed_path=feed_dir/f"{id}"
-        feed_path.mkdir(parents=True,exist_ok=True)
-        bm25_path=feed_path/"bm25.pkl"
-        await asyncio.to_thread(build_and_save_bm25,chunks,bm25_path)
-        vectorstore=FAISS.from_documents(chunks,embedding_maker)
-        vectorstore.save_local(str(feed_path))
+        chunks = await asyncio.to_thread(website_splitter.split, markdown)
+        id = str(uuid.uuid4())
+        feed_path = feed_dir / f"{id}"
+        await asyncio.to_thread(feed_path.mkdir, parents=True, exist_ok=True)
+        bm25_path = feed_path / "bm25.pkl"
+        await asyncio.to_thread(build_and_save_bm25_sync, chunks, bm25_path)
+        await asyncio.to_thread(_build_faiss_and_save_sync, chunks, feed_path)
         database_saved = await save_website_to_database(url=url, feed_id=id, chunks=len(chunks))
         if database_saved:
             print(f"Website {url} ingested and saved to database with ID: {id}")
@@ -109,17 +110,16 @@ async def ingest_website(url:str):
         return None
 
 
-async def update_website(url:str,id:str):
-    markdown=await website_crawl(url)
+async def update_website(url: str, id: str):
+    markdown = await website_crawl(url)
     if markdown is None:
-        markdown=await website_crawl2(url)
+        markdown = await website_crawl2(url)
     if markdown:
-        chunks=website_splitter.split(markdown)
-        feed_path=feed_dir/f"{id}"
-        temp_path=feed_dir/f"{id}__temp"
-        temp_path.mkdir(parents=True,exist_ok=True)
-        vectorstore=await asyncio.to_thread(FAISS.from_documents, chunks, embedding_maker)
-        await asyncio.to_thread(vectorstore.save_local, str(temp_path))
+        chunks = await asyncio.to_thread(website_splitter.split, markdown)
+        feed_path = feed_dir / f"{id}"
+        temp_path = feed_dir / f"{id}__temp"
+        await asyncio.to_thread(temp_path.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(_build_faiss_and_save_sync, chunks, temp_path)
         if feed_path.exists():
             await asyncio.to_thread(shutil.rmtree, feed_path)
         await asyncio.to_thread(temp_path.rename, feed_path)
@@ -130,11 +130,13 @@ async def update_website(url:str,id:str):
         print("No markdown content to process.")
         return None
 
-async def delete_website(id:str):
+
+async def delete_website(id: str):
     try:
-        feed_path=feed_dir/f"{id}"
-        if feed_path.exists():
-            await anyio.to_thread.run_sync(shutil.rmtree, feed_path)
+        feed_path = feed_dir / f"{id}"
+        exists = await asyncio.to_thread(feed_path.exists)
+        if exists:
+            await asyncio.to_thread(shutil.rmtree, feed_path)
             print(f"Feed with ID: {id} deleted successfully.")
             return True
         else:
@@ -143,6 +145,3 @@ async def delete_website(id:str):
     except Exception as e:
         print(f"Error occurred while deleting Feed: {e}")
         return False
-
-
-

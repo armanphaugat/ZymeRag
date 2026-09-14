@@ -24,39 +24,33 @@ except ImportError:
     ChatPromptTemplate = None
     StrOutputParser = None
 
-WEB_SEARCH_PROMPT = """System: You are a Precise Technical Assistant.
-            Core Instruction: Answer ONLY using the provided Context. Do not use external knowledge.
-            Rules:
-            1. Context Check:
-            -If answer exists in Context → Provide it with relevant citations.
-            -If answer NOT in Context → Reply: "I don't have this information online either" (In user's language)
-            2. No Hallucinations:
-            - Never fabricate facts, examples, or details not in Context.
-            - If uncertain, say so explicitly.
-            3. Language Handling:
-            - Detect user's question language automatically.
-            - Respond in the SAME language as the question.
-            - If user specifies a different language (e.g., "answer in Spanish"), use that language instead.
-            - Maintain clarity: always prioritize user's language preference over context language.
+WEB_SEARCH_PROMPT = """You are a Precise Technical Assistant for ZymeRag.
+Core Instruction: Synthesize a helpful, accurate, and concise answer ONLY using the provided Web Context below.
 
-            4. Citation & References:
-            - Quote or reference specific sections from Context when possible.
-            - Format: "According to [source], ..."
- 
-            5. Tone & Style:
-            - Be concise, professional, and direct.
-            - Avoid unnecessary elaboration.
-            - Use bullet points only if context already uses them.
-Context: {context}
+Rules:
+1. Context Check:
+   - If the answer exists in the Context → Provide a detailed, accurate response citing the web sources.
+   - If the answer is NOT in the Context → State clearly: "I could not find sufficient information from web search for this query."
+2. Anti-Hallucination:
+   - Do NOT invent or assume facts not grounded in the provided Context.
+3. Language:
+   - Automatically detect and respond in the same language as the user question.
+
+Context:
+{context}
+
+Sources:
+{sources}
+
 User Question: {question}
-Sources: {sources}
+
 Response:"""
 
 
 class WebSearchFallback:
     """
-    Fallback Web Search component for RAG pipeline.
-    Uses Tavily and Exa search APIs (with highlights) to retrieve external web context,
+    Fallback Web Search component for ZymeRag RAG pipeline.
+    Uses Tavily and Exa search APIs to retrieve external web context,
     and synthesizes answers using ChatGroq (llama-3.3-70b-versatile) when local KB is insufficient.
     """
 
@@ -85,13 +79,13 @@ class WebSearchFallback:
 
         return ChatGroq(
             model=self.llm_model,
-            temperature=0,
+            temperature=0.1,
             api_key=key
         )
 
     def search_tavily(self, question: str, max_results: int = 5) -> Tuple[str, List[str]]:
         """
-        Execute search using Tavily API and return (context_text, sources_urls).
+        Execute synchronous Tavily search and return (context_text, list_of_source_urls).
         """
         key = self.tavily_api_key or os.getenv("TAVILY_API_KEY")
         if not key:
@@ -108,18 +102,18 @@ class WebSearchFallback:
         context = []
         sources = []
         for r in results:
-            content = r.get("content", "")
+            content = r.get("content", "").strip()
             if content:
                 context.append(content)
-            url = r.get("url", "")
+            url = r.get("url", "").strip()
             if url:
                 sources.append(url)
 
         return "\n\n".join(context), sources
 
-    def search_exa(self, question: str, num_results: int = 5) -> Tuple[str, List[str]]:
+    def search_exa(self, question: str, max_results: int = 5) -> Tuple[str, List[str]]:
         """
-        Execute search using Exa API with highlights enabled and return (context_text, sources_urls).
+        Execute synchronous Exa search with highlights and return (context_text, list_of_source_urls).
         """
         key = self.exa_api_key or os.getenv("EXA_API_KEY")
         if not key:
@@ -131,10 +125,10 @@ class WebSearchFallback:
         response = client.search(
             question,
             type="auto",
-            num_results=num_results,
+            num_results=max_results,
             contents={"highlights": True}
         )
-        if not response.results:
+        if not getattr(response, "results", None):
             raise ValueError("Exa returned no results")
 
         context = []
@@ -150,25 +144,92 @@ class WebSearchFallback:
 
         return "\n\n".join(context), sources
 
-    def synthesize_answer(self, question: str, context: str, sources: List[str]) -> str:
+    async def async_search_tavily(self, question: str, max_results: int = 5) -> Tuple[str, List[str]]:
+        """Non-blocking async wrapper for Tavily search."""
+        return await asyncio.to_thread(self.search_tavily, question, max_results)
+
+    async def async_search_exa(self, question: str, max_results: int = 5) -> Tuple[str, List[str]]:
+        """Non-blocking async wrapper for Exa search."""
+        return await asyncio.to_thread(self.search_exa, question, max_results)
+
+    async def synthesize_answer_async(self, question: str, context: str, sources: List[str]) -> str:
         """
-        Synthesize answer from web search context using ChatGroq and WEB_SEARCH_PROMPT.
+        Synthesize answer asynchronously using ChatGroq ainvoke.
         """
+        if not context.strip():
+            return "No web context found to synthesize an answer."
+
         llm = self.get_llm()
         prompt = ChatPromptTemplate.from_template(WEB_SEARCH_PROMPT)
         chain = prompt | llm | StrOutputParser()
         sources_str = "\n".join(f"- {url}" for url in sources) if sources else "None"
-        
+
+        answer = await chain.ainvoke({
+            "context": context,
+            "sources": sources_str,
+            "question": question
+        })
+        return f"Web Search Result (Fallback):\n\n{answer}"
+
+    def synthesize_answer(self, question: str, context: str, sources: List[str]) -> str:
+        """
+        Synchronous fallback for answer synthesis.
+        """
+        if not context.strip():
+            return "No web context found to synthesize an answer."
+
+        llm = self.get_llm()
+        prompt = ChatPromptTemplate.from_template(WEB_SEARCH_PROMPT)
+        chain = prompt | llm | StrOutputParser()
+        sources_str = "\n".join(f"- {url}" for url in sources) if sources else "None"
+
         answer = chain.invoke({
             "context": context,
             "sources": sources_str,
             "question": question
         })
-        return f"Web Search Result (not from knowledge base):\n\n{answer}"
+        return f"Web Search Result (Fallback):\n\n{answer}"
+
+    async def web_search_fallback_async(
+        self,
+        question: str,
+        provider: str = "both",
+        max_results: int = 5
+    ) -> Optional[str]:
+        """
+        Async web search fallback executing search and synthesis non-blockingly.
+        """
+        tavily_key = self.tavily_api_key or os.getenv("TAVILY_API_KEY")
+        exa_key = self.exa_api_key or os.getenv("EXA_API_KEY")
+
+        # Provider strategy: Tavily
+        if provider in ("tavily", "both") and tavily_key:
+            try:
+                context, sources = await self.async_search_tavily(question, max_results=max_results)
+                print(f"[WebSearchFallback] Tavily search succeeded for: '{question[:50]}'")
+                return await self.synthesize_answer_async(question, context, sources)
+            except Exception as e:
+                print(f"[WebSearchFallback] Tavily search failed: {e}")
+
+        # Provider strategy: Exa
+        if provider in ("exa", "both") and exa_key:
+            try:
+                context, sources = await self.async_search_exa(question, max_results=max_results)
+                print(f"[WebSearchFallback] Exa AI search succeeded for: '{question[:50]}'")
+                return await self.synthesize_answer_async(question, context, sources)
+            except Exception as e:
+                print(f"[WebSearchFallback] Exa AI search failed: {e}")
+
+        if not tavily_key and not exa_key:
+            print("[WebSearchFallback] No web search API keys configured (TAVILY_API_KEY / EXA_API_KEY)")
+        else:
+            print("[WebSearchFallback] All requested web search providers failed")
+
+        return None
 
     def web_search_fallback(self, question: str) -> Optional[str]:
         """
-        Attempts web search via Tavily first, then Exa if Tavily fails, and synthesizes the final response.
+        Synchronous web search fallback.
         """
         tavily_key = self.tavily_api_key or os.getenv("TAVILY_API_KEY")
         exa_key = self.exa_api_key or os.getenv("EXA_API_KEY")
@@ -176,23 +237,16 @@ class WebSearchFallback:
         if tavily_key:
             try:
                 context, sources = self.search_tavily(question)
-                print(f"Web search succeeded via Tavily for: {question[:60]}")
                 return self.synthesize_answer(question, context, sources)
             except Exception as e:
-                print(f"Tavily search failed: {e}")
+                print(f"[WebSearchFallback] Tavily search failed: {e}")
 
         if exa_key:
             try:
                 context, sources = self.search_exa(question)
-                print(f"Web search succeeded via Exa AI for: {question[:60]}")
                 return self.synthesize_answer(question, context, sources)
             except Exception as e:
-                print(f"Exa AI search failed: {e}")
-
-        if not tavily_key and not exa_key:
-            print("No web search API keys configured (TAVILY_API_KEY / EXA_API_KEY)")
-        else:
-            print("All web search providers failed")
+                print(f"[WebSearchFallback] Exa AI search failed: {e}")
 
         return None
 
@@ -222,9 +276,11 @@ class WebSearchFallback:
         query: str,
         kb_chunks: List[Any],
         threshold: float = 0.5,
+        provider: str = "both",
+        max_results: int = 5,
     ) -> Dict[str, Any]:
         """
-        Evaluates KB chunks. If insufficient, triggers web_search_fallback to retrieve and synthesize answer.
+        Evaluates KB chunks. If insufficient, triggers async web search fallback.
         """
         if self.is_kb_sufficient(kb_chunks, threshold=threshold):
             return {
@@ -235,8 +291,12 @@ class WebSearchFallback:
             }
 
         print(f"[WebSearchFallback] KB results insufficient or empty. Triggering web search fallback...")
-        synthesized_answer = await asyncio.to_thread(self.web_search_fallback, query)
-        
+        synthesized_answer = await self.web_search_fallback_async(
+            question=query,
+            provider=provider,
+            max_results=max_results
+        )
+
         return {
             "source": "web_fallback",
             "is_fallback": True,
@@ -245,7 +305,7 @@ class WebSearchFallback:
         }
 
 
-# Standalone function maintaining exact compatibility with old implementation
+# Standalone backward-compatible function
 def web_search_fallback(question: str) -> Optional[str]:
     fallback_instance = WebSearchFallback()
     return fallback_instance.web_search_fallback(question)
